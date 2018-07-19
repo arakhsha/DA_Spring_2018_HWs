@@ -1,0 +1,675 @@
+---
+title: "Fourth Week: Hypothesis Testing"
+subtitle: "TIMSS Analysis"
+author: "امین رخشا ۹۵۱۰۹۳۱۵"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+
+<div align="center">
+<img  src="images/math.jpg"  align = 'center'>
+</div>
+
+<h1 dir="RTL"> 
+تمرین سری چهارم: چقدر ریاضی بلدیم و چرا؟
+</h1>
+
+<p dir="RTL"> لطفا مقاله زیر را مطالعه بفرمایید. </p>
+<p dir="RTL">
+[چرایی رتبه ضعیف ایران در آزمون تیمز](https://goo.gl/gX8DZc)
+</p>
+
+> <p dir="RTL"> 
+با استفاده از داده های ارزیابی تیمز ۲۰۱۵ ادعاهای زیر را مورد ارزیابی قراردهید.
+برای هر سوال علاوه بر استدلال آماری که در غالب آزمون فرض تعریف می شود از تصویرسازی مناسب باهر دو ابزار
+ggplot2
+و
+highcharter
+استفاده نمایید.
+به دلخواه به هفت گزاره از موارد زیر پاسخ دهید.
+</p>
+
+***
+<h2 dir="RTL"> 
+کارهای اولیه
+</h2>
+
+```{r 0, message=FALSE, warning=FALSE}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(highcharter)
+library(ggthemes)
+library(readxl)
+library(coin)
+
+bsa_rds = read_rds('timss_data/bsa.rds')
+bts_rds = read_rds('timss_data/bts.rds')
+btm_rds = read_rds('timss_data/btm.rds')
+bst_rds = read_rds('timss_data/bst.rds')
+bsg_rds = read_rds('timss_data/bsg.rds')
+bcg_rds = read_rds('timss_data/bcg.rds')
+theme_set(theme_gdocs())
+```
+<p dir="RTL">
+۱. میران رضایت معلمان در پیشرفت تحصیلی دانش آموزان موثر است.
+</p>
+<p dir="RTL">
+برای به دست آوردن میزان رضایت معلمان از میانگین پاسخ آن ها به بخش های سوال ۱۰ پرسشنامه استفاده کردیم. با توجه به تقریبا پیوسته بودن دو متغیر از کوریلیشن تست با روش spearman استفاده می کنیم که معایب روش pearson را ندارد و برای اینجا مناسب است. می بینیم که میزان رضایت معلم لزوما در پیشرفت دانش آموزان تاثیری ندارد.
+در نمودارها نقاط قرمز میانگین امتیاز برای آن مقدار رضایت هستند. 
+</p>
+
+```{r 1A, message=FALSE, warning=FALSE}
+teacherSatisfaction = rbind (
+    bts_rds %>% select(idcntry:idlink, btbg10a:btbg10g) %>% mutate(subject = 'sci'),
+    btm_rds %>% select(idcntry:idlink, btbg10a:btbg10g) %>% mutate(subject = 'math')
+  ) %>%
+  gather(key = "question", value = "answer", btbg10a:btbg10g) %>% 
+  group_by(idcntry, idschool, itcourse, idtealin, idteach, idlink, subject) %>%
+  summarise(satisfaction = 4 - mean(answer))
+
+links = bst_rds %>% 
+  select(idcntry:idsubj)
+  
+studentScores = bsa_rds %>% 
+  select(idcntry:idstud, bsmmat01:bsssci05) %>%
+  mutate(math = (bsmmat01 + bsmmat01 + bsmmat01 + bsmmat01 + bsmmat05) / 5,
+         sci = (bsssci01 + bsssci02 + bsssci03 + bsssci04 + bsssci05) / 5) %>% 
+  gather(key = "subject", value = "score", math:sci) %>% 
+  group_by(idcntry, idbook, idschool, idclass, idstud, subject) %>%
+  summarise(score = mean(score))
+
+studentScores = left_join(
+  studentScores,
+  links
+)
+
+studentScores = left_join(
+  studentScores,
+  teacherSatisfaction
+)
+
+filteredScores = studentScores %>% 
+  filter(!is.na(score), !is.na(satisfaction))
+
+cor.test(
+  filteredScores$satisfaction,
+  filteredScores$score,
+  alternative = "greater",
+  method = 'spearman')
+```
+
+
+```{r 1B, message=FALSE, warning=FALSE, fig.align='center'}
+means = filteredScores %>% 
+  group_by(satisfaction) %>% 
+  summarise(avgScore = round(mean(score), 2))
+
+plotData = filteredScores %>% rowwise() %>% sample_n(1000)
+ggplot() +
+  geom_point(data = plotData, aes(x = satisfaction, y = score), color = 'gray', alpha = 0.1) +
+  geom_point(data = means, aes(x = satisfaction, y = avgScore), color = 'red') +
+  geom_line(data = means, aes(x = satisfaction, y = avgScore), color = 'red')
+
+plotData %>% 
+  hchart(type = 'scatter',
+         hcaes(x = satisfaction, y = score),
+         color = 'rgba(130, 130, 130, 0.2)',
+         enableMouseTracking = FALSE) %>% 
+  hc_add_series(data = means, type = 'line', hcaes(x = satisfaction, y = avgScore), name = 'average', color = 'red')
+```
+***
+
+<p dir="RTL">
+۲. والدینی که تحصیلات بیشتری دارند دارای فرزندان موفق تری می باشند.
+</p>
+<p dir="RTL">
+برای بررسی تفاوت نمره بین گروه های با تحصیلات متفاوت والدینشان، از تست anova استفاده میکنیم. می بینیم که نمره در بین گروه ها متفاوت است. مشکل این تست این است که صرفا تفاوت گروه ها را نتیجه می دهد. برای این که جهت تاثیر تحصیلات والدین یعنی این که تاثیر مثبت دارد را بفهمیم، طبق صحبت استاد در این تمرین بررسی دو گروه اول آخر با t-test کفایت می کند و ترکیب این تست با anova برای این تمرین کافی است. گروه اول و آخر را هم مقایسه می کنیم و می بینیم که تحصیلات والدین بسیار در نمره فرزنداشان موثر است.
+</p>
+```{r 2A, message=FALSE, warning=FALSE, fig.align='center'}
+parentEducation = bsg_rds %>% 
+  select(idcntry:idgrade, bsbg07a:bsbg07b) %>% 
+  rename(mother = bsbg07a, father = bsbg07b) %>% 
+  gather(key = 'parent', value = 'education', mother:father) %>% 
+  filter(education != 8) 
+
+studentScores = left_join(
+  studentScores,
+  parentEducation
+)
+
+filteredScores = studentScores %>% 
+  filter(!is.na(score), !is.na(education)) %>% 
+  mutate(education = as.numeric(education), score = as.numeric(score))
+
+summary(aov(
+  score ~ education,
+  data = filteredScores))
+
+t.test(
+  filteredScores %>% filter(education == 1) %>% .$score,
+  filteredScores %>% filter(education == 7) %>% .$score
+)
+```
+
+
+```{r 2B, message=FALSE, warning=FALSE, fig.align='center'}
+
+ggplot(filteredScores, aes(group = education, y = score, x = education, fill = as.factor(education))) +
+  geom_boxplot() +
+  labs(x = 'Education Level') +
+  guides(fill = F)
+  
+  
+hcboxplot(x = filteredScores$score,
+          var = filteredScores$education,
+          outliers = F) %>%
+  hc_chart(type = "column") %>%
+  hc_title(text = "Parent's Education and Score Relation") %>%
+  hc_xAxis(title = list(text = "Education Level")) %>%
+  hc_yAxis(title = list(text = "Score")) 
+```
+
+***
+
+<p dir="RTL">
+۳. امکانات رفاهی در خانه موجب پیشرفت تحصیلی می گردد.
+</p>
+<p dir="RTL">
+از میانگین جواب افراد به بخش های مختلف سوال ۶ برای سنجش امکانات رفاهی استفاده می کنیم. برای آزمون فرض مثل سوال قبل عمل می کنیم و میبینم که امکانات رفاهی تاثیر به سزایی در نمره دارد.
+</p>
+
+```{r 3A, message=FALSE, warning=FALSE, fig.align='center'}
+homeState = bsg_rds %>% 
+  select(idcntry:idgrade, bsbg06a:bsbg06g) %>% 
+  gather(key = 'question', value = 'existence', bsbg06a:bsbg06g) %>% 
+  group_by(idcntry, idbook, idschool, idclass, idstud, idgrade) %>% 
+  summarise(state = 2 - mean(existence))
+
+studentScores = left_join(
+  studentScores,
+  homeState
+)
+
+filteredScores = studentScores %>% 
+  filter(!is.na(score), !is.na(state)) %>% 
+  mutate(state = as.numeric(state), score = as.numeric(score))
+
+summary(aov(
+  score ~ state,
+  data = filteredScores))
+
+t.test(
+  filteredScores %>% filter(state == 0) %>% .$score,
+  filteredScores %>% filter(state == 1) %>% .$score
+)
+```
+
+
+```{r 3B, message=FALSE, warning=FALSE, fig.align='center'}
+
+ggplot(filteredScores, aes(group = state, y = score, x = state, fill = as.factor(state))) +
+  geom_boxplot() +
+  labs(x = 'Home Facilities') +
+  guides(fill = F)
+
+
+hcboxplot(x = filteredScores$score,
+          var = round(filteredScores$state, 1),
+          outliers = F) %>%
+  hc_chart(type = "column") %>%
+  hc_title(text = "Home Facilities and Score Relation") %>%
+  hc_xAxis(title = list(text = "Home Facilities")) %>%
+  hc_yAxis(title = list(text = "Score")) 
+
+```
+
+***
+
+<p dir="RTL">
+۴. محیط آرام مدرسه نقش مهمی در پیشرفت تحصیلی دارد.
+</p>
+
+***
+
+<p dir="RTL">
+۵. معلمان با تحصیلات  بالاتر یا تجربه بیشتر دانش آموزان موفق تری تربیت می کنند.
+</p>
+
+***
+
+<p dir="RTL"> 
+۶. پسران در کاربرد هندسه قوی تر هستند.
+</p>
+<p dir="RTL">
+چون در داده Plausible Value برای کاربرد هندسه نداریم مجبوریم خودمان آن را برای دانش آموزان بفهمیم. برای هر سوال، مقدار داده شده بیانگیر چیز متفاوتی است. برای برخی سوالات درستی، نادرستی یا پاسخ ناقص و برای بعضی گزینه ی انتخاب شده توسط دانش آموزان آمده است. این که کدام مقدار بیانگر کدام موضوع است هم بین سوالات متفاوت است. این که مقدار داده شده در داده بیانگر چیست و کلید سوالات تستی در فایل  اکسل codebook داده شده است. آن را می خوانیم و با آن نمره دانش آموزان در سوالات مختلف را محاسبه می کنیم. همانطور که می بینید کار آسانی نیست! در نهایت برای هر سوال و دانش آموز به ۳ حالت درست، نادرست و نیمه درست می رسیم که به ترتیب نمره ی ۱۰۰، ۰ و ۵۰ را به آن می دهیم. با توجه به معلوم نبودن توزیع نمرات، از permutation test برای مقایسه بین دختران و پسران استفاده می کنیم. همانطور که می بینید پسران در این زمینه بهتر هستند.
+</p>
+
+```{r 6A, message=FALSE, warning=FALSE, fig.align='center'}
+qdata1 = bind_rows(
+          read_xlsx('timss_data/T15_G8_ItemInformation.xlsx', sheet = 'MAT'),
+          read_xlsx('timss_data/T15_G8_ItemInformation.xlsx', sheet = 'SCI'))
+qdata2 = read_xlsx('timss_data/T15_G8_Codebook.xlsx', sheet = 'BSA')
+qdata = left_join(
+  qdata1 %>% rename(question = `Item ID`),
+  qdata2 %>% rename(question = Variable),
+  by = 'question'
+)
+qdata$`Value Scheme Detailed` = as.factor(qdata$`Value Scheme Detailed`)
+qdata$markingType = as.numeric(qdata$`Value Scheme Detailed`)
+qdata$question = tolower(qdata$question)
+qdata$Key = replace(qdata$Key, qdata$Key == 'A', 1) %>% 
+  replace(qdata$Key == 'B', 2) %>% 
+  replace(qdata$Key == 'C', 3) %>% 
+  replace(qdata$Key == 'D', 4)
+qdata$Key = as.numeric(qdata$Key)
+
+geometryApplyingQuestions = qdata %>%
+  filter(`Content Domain` == 'Geometry', `Cognitive Domain` == 'Applying') %>% 
+  .$question
+
+studentGeomScores = bsa_rds %>% 
+  select(idcntry:m062120, itsex) %>% 
+  gather(key = 'question', value = 'value', m042182:m062120) %>% 
+  filter(question %in% geometryApplyingQuestions) %>% 
+  select(idcntry, idstud, itsex, question, value) %>% 
+  filter(!is.na(value)) %>% 
+  unique()
+
+studentGeomScores = left_join(
+  studentGeomScores,
+  qdata %>% select(question, Key, markingType, `Maximum Points`),
+  by = 'question'
+)
+
+
+#marking schemes:
+# View(qdata %>% select(`Value Scheme Detailed`, markingType) %>% unique())
+
+calcScore = function(markingType, value, Key) {
+  result = rep(NA, length(value))
+  correct = which(
+    (!is.na(Key) & (value == Key)) |
+    (value >= 19 & value <= 21) |
+    (value >= 10 & value <= 12 & markingType < 24)
+  )
+  partial = which(value >= 10 & value <= 12 & markingType >= 24)
+  incorrect = which(
+    (!is.na(Key) & value != Key) |
+    (value >= 70)
+  )
+  result[correct] = rep(100, length(correct))
+  result[partial] = rep(50, length(partial))
+  result[incorrect] = rep(0, length(incorrect))
+  return(result)
+}
+
+studentGeomScores = studentGeomScores %>% 
+  mutate(score = calcScore(markingType, value, Key))
+
+testResult = oneway_test(score ~ as.factor(itsex),
+                     data = studentGeomScores,
+                     alternative = 'less')
+
+testResult
+```
+
+
+```{r 6B, message=FALSE, warning=FALSE, fig.align='center'}
+plotData = studentGeomScores %>% 
+  filter(!is.na(itsex)) %>% 
+  group_by(itsex) %>% 
+  summarise(avg = round(weighted.mean(score,  `Maximum Points`), 2)) %>% 
+  mutate(gender = ifelse(itsex == 1, 'female', 'male')) %>% 
+  ungroup() 
+
+
+ggplot(plotData, aes(x = gender, y = avg, fill = as.factor(gender))) +
+  geom_bar(stat = 'identity') +
+  labs(fill = 'score', y = 'average score') +
+  coord_flip() +
+  guides(fill = F) +
+  labs(title = 'Applying Geometry Average Score By Gender')
+
+hchart(plotData, type = 'bar', hcaes(x = gender, y = avg, color = as.factor(gender))) %>% 
+  hc_title(text = "Applying Geometry Average Score By Gender")
+```
+
+***
+
+<p dir="RTL"> 
+۷. تغذیه دانش آموزان نقش اساسی در یادگیری آنها دارد. 
+</p>
+<p dir="RTL">
+از میزان صبحانه خوردن دانش آموزان برای سنجش تغذیه استفاده می کنیم. مانند سوال ۲ عمل می کنیم. ابتدا با تست anova تاثیرگذاری را ثابت می کنیم و بعد با t-test بین گروه اول و آخر جهت تاثیر را نشان می دهیم. می بینیم که تغذیه در نمرات موثر است.
+</p>
+
+```{r 7A, message=FALSE, warning=FALSE, fig.align='center'}
+breakfast = bsg_rds %>% 
+  select(idcntry:idgrade, bsbg12) %>% 
+  rename(breakfast = bsbg12) %>% 
+  mutate(breakfast = 4 - as.numeric(breakfast))
+
+studentScores = left_join(
+  studentScores,
+  breakfast
+)
+
+filteredScores = studentScores %>% 
+  filter(!is.na(score), !is.na(breakfast)) %>% 
+  mutate(breakfast = as.numeric(breakfast), score = as.numeric(score))
+
+summary(aov(
+  score ~ state,
+  data = filteredScores))
+
+t.test(
+  filteredScores %>% filter(breakfast == 0) %>% .$score,
+  filteredScores %>% filter(breakfast == 3) %>% .$score
+)
+```
+
+
+```{r 7B, message=FALSE, warning=FALSE, fig.align='center'}
+
+ggplot(filteredScores, aes(group = breakfast, y = score, x = breakfast, fill = as.factor(breakfast))) +
+  geom_boxplot() +
+  labs(x = 'Breakfast Frequency') +
+  guides(fill = F)
+
+
+hcboxplot(x = filteredScores$score,
+          var = round(filteredScores$breakfast, 1),
+          outliers = F) %>%
+  hc_chart(type = "column") %>%
+  hc_title(text = "Breakfast Frequency and Score Relation") %>%
+  hc_xAxis(title = list(text = "Breakfast Frequency")) %>%
+  hc_yAxis(title = list(text = "Score")) 
+
+```
+
+***
+
+<p dir="RTL"> 
+۸. مدارس با امکانات بیشتر دارای عملکرد بهتری می باشند.
+</p>
+
+
+***
+
+<p dir="RTL"> 
+۹. علت افت تحصیلی عدم مشارکت در کلاس است.
+</p>
+<p dir="RTL">
+دقیقا مانند سوال ۷ عمل می کنیم. می بینیم که حضور در کلاس در نمره تاثیر مثبت دارد.
+</p>
+
+```{r 9A, message=FALSE, warning=FALSE, fig.align='center'}
+presence = bsg_rds %>% 
+  select(idcntry:idgrade, bsbg11) %>% 
+  rename(presence = bsbg11) %>% 
+  mutate(presence = as.numeric(presence))
+
+studentScores = left_join(
+  studentScores,
+  presence
+)
+
+filteredScores = studentScores %>% 
+  filter(!is.na(score), !is.na(presence)) %>% 
+  mutate(presence = as.numeric(presence), score = as.numeric(score))
+
+summary(aov(
+  score ~ presence,
+  data = filteredScores))
+
+t.test(
+  filteredScores %>% filter(presence == 1) %>% .$score,
+  filteredScores %>% filter(presence == 4) %>% .$score
+)
+```
+
+
+```{r 9B, message=FALSE, warning=FALSE, fig.align='center'}
+
+ggplot(filteredScores, aes(group = presence, y = score, x = presence, fill = as.factor(presence))) +
+  geom_boxplot() +
+  labs(x = 'Presence In Class', title = 'Presence In Class and Score Relation') +
+  guides(fill = F)
+
+
+hcboxplot(x = filteredScores$score,
+          var = round(filteredScores$presence, 1),
+          outliers = F) %>%
+  hc_chart(type = "column") %>%
+  hc_title(text = "Presence In Class and Score Relation") %>%
+  hc_xAxis(title = list(text = "Presence In Class")) %>%
+  hc_yAxis(title = list(text = "Score")) 
+
+```
+
+***
+
+<p dir="RTL"> 
+۱۰. دانش آموزان ایرانی در استدلال قوی تر از کاربرد هستند.
+</p>
+<p dir="RTL">
+از t test استفاده می کنیم. یک گروه را نمرات کاربرد و دیگری نمرات استدلال در نظر می گیریم . می بینیم که p value بزرگ است پس نمیتوان با این داده ها چنین حرفی زد
+</p>
+
+```{r 10A, message=FALSE, warning=FALSE, fig.align='center'}
+studentScores = bsa_rds %>% 
+  select(idcntry:idstud, bsmapp01:bsmrea05, bssapp01:bssrea05) %>% 
+  filter(idcntry == 364) %>% 
+  group_by(idcntry, idbook, idschool, idclass, idstud) %>%
+  summarise(
+    applying = mean(c(bsmapp01:bsmapp05, bssapp01:bssapp05)),
+    reasoning = mean(c(bsmrea01:bsmrea05, bssrea01:bssrea05))
+  ) %>% 
+  gather(key = 'type', value = 'score', applying:reasoning) %>% 
+  unique()
+
+
+applying <- studentScores %>% filter(type == 'applying') %>% .$score
+reasoning <- studentScores %>% filter(type == 'reasoning') %>% .$score
+
+t.test(reasoning,
+       applying, 
+       alternative = 'less') 
+```
+
+
+```{r 10B, message=FALSE, warning=FALSE, fig.align='center'}
+ggplot(data = studentScores, aes(group = type, fill = type, x = score)) +
+  geom_density(alpha = 0.3) +
+  scale_fill_gdocs() +
+  labs(title = 'Applying Scores vs Reasoning Scores for Iranian Students')
+  
+
+hchart(type = "area",
+       density(applying),
+       name = 'applying') %>% 
+  hc_add_series(type = 'area',
+                data = density(reasoning),
+                name = 'reasoning') %>% 
+  hc_title(text = "Applying Scores vs Reasoning Scores for Iranian Students")
+```
+
+***
+
+<p dir="RTL">
+سه گزاره جالب کشف کنید و ادعای خود را ثابت نمایید.
+</p>
+
+<p dir="RTL">
+دانش آموزان که یک کنسول بازی در خانه دارند نمرات بهتری می گیرند.
+</p>
+<p dir="RTL">
+از یکی از سوالات پرسشنامه برای بررسی این موضوع استفاده می کنیم. و t test بین دو گروه این گزاره را نتیجه می دهد.
+</p>
+
+```{r P1A, message=FALSE, warning=FALSE, fig.align='center'}
+gamingSystem = bsg_rds %>% 
+  select(idcntry:idgrade, bsbg06g) %>% 
+  rename(gamingSystem = bsbg06g) %>% 
+  mutate(gamingSystem = ifelse(gamingSystem == 1, 'yes', 'no'))
+
+studentScores = bsa_rds %>% 
+  select(idcntry:idstud, bsmmat01:bsssci05) %>%
+  mutate(score = (bsmmat01 + bsmmat01 + bsmmat01 + bsmmat01 + bsmmat05 +
+                    bsssci01 + bsssci02 + bsssci03 + bsssci04 + bsssci05) / 10) %>% 
+  select(idcntry:idstud, score)
+
+studentScores = left_join(
+  studentScores,
+  gamingSystem
+)
+
+filteredScores = studentScores %>% 
+  filter(!is.na(score), !is.na(gamingSystem)) %>% 
+  mutate(score = as.numeric(score))
+
+t.test(
+  formula = score ~ gamingSystem,
+  data = filteredScores,
+  alternative = 'less'
+)
+
+
+```
+
+
+```{r P1B, message=FALSE, warning=FALSE, fig.align='center'}
+means = filteredScores %>% 
+  group_by(gamingSystem) %>% 
+  summarise(avgScore = mean(score))
+
+plotData = filteredScores %>% rowwise() %>% sample_n(1000)
+
+
+ggplot(data = filteredScores, aes(group = gamingSystem, fill = gamingSystem, x = score)) +
+  geom_density(alpha = 0.3) +
+  geom_vline(data = means, aes(xintercept = avgScore, color = gamingSystem)) +
+  scale_x_continuous(limits = c(0, 1000)) +
+  theme(legend.position = 'bottom', legend.direction = 'horizontal') +
+  labs(fill = 'Gaming Systam', color  = 'Gaming Systam')
+
+withSystem <- filteredScores %>% filter(gamingSystem == 'yes') %>% .$score
+withoutSystem <- filteredScores %>% filter(gamingSystem == 'no') %>% .$score
+
+hchart(type = "area",
+       density(withSystem),
+       name = 'With Gaming System') %>% 
+  hc_add_series(type = 'area',
+                data = density(withoutSystem),
+                name = 'Without Gaming System')
+
+```
+
+<p dir="RTL">
+دانش آموزان مهاجر موفق تر هستند.
+</p>
+<p dir="RTL">
+این که آیا دانش آموز در کشور برگزاری آزمون متولد شده است یا نه در پرسشنامه آمده است. برای مقایسه از t test استفاده می کنیم و میبینم که بین دو گروه تفاوت معنی داری وجود دارد.
+</p>
+
+
+```{r P2A, message=FALSE, warning=FALSE, fig.align='center'}
+immigration = bsg_rds %>% 
+  select(idcntry:idgrade, bsbg10a) %>% 
+  rename(immigration = bsbg10a) %>% 
+  mutate(immigration = ifelse(immigration == 1, 'no', 'yes'))
+
+studentScores = left_join(
+  studentScores,
+  immigration
+)
+
+filteredScores = studentScores %>% 
+  filter(!is.na(score), !is.na(immigration)) %>% 
+  mutate(score = as.numeric(score))
+
+t.test(
+  formula = score ~ immigration,
+  data = filteredScores,
+  alternative = 'less'
+)
+
+```
+
+
+```{r P2B, message=FALSE, warning=FALSE, fig.align='center'}
+means = filteredScores %>% 
+  group_by(immigration) %>% 
+  summarise(avgScore = round(mean(score), 2))
+
+plotData = filteredScores %>% rowwise() %>% sample_n(1000)
+
+
+ggplot(data = filteredScores, aes(fill = immigration, x = score)) +
+  geom_density(alpha = 0.3) +
+  geom_vline(data = means, aes(xintercept = avgScore, color = immigration)) +
+  scale_x_continuous(limits = c(0, 1000)) +
+  theme(legend.position = 'bottom', legend.direction = 'horizontal') +
+  labs(fill = 'Immigirant', color  = 'Immigirant')
+
+immigirant <- filteredScores %>% filter(immigration == 'yes') %>% .$score
+nonimmigirant <- filteredScores %>% filter(immigration == 'no') %>% .$score
+
+hchart(type = "area",
+       density(immigirant),
+       name = 'Immigirant') %>% 
+  hc_add_series(type = 'area',
+                data = density(nonimmigirant),
+                name = 'Nonimmigirant')
+
+```
+
+
+<p dir="RTL">
+دختران برنامه دارند بیشتر تحصیل کنند.
+</p>
+<p dir="RTL">
+طول تحصیلات در پرسشنامه از دانش آموزان سوال شده است. با توجه گسسته بودن مقادیر نمی توان نرمال بودن نمرات را فرض کرد. برای همین از permutation test استفاده می کنیم. می بینیم که این تست فرض برابری دو گروه را رد می کند و گزاره را می پذیریم.  در نمودارها کسر دانش آموزانی که انتظار دارند تحصیلاتشان را تا آن مقطع ادامه دهند نشان داده شده است. می بینیم که در دختران تمایل به سمت تحصیلات بالاتر بیشتر است.
+</p>
+
+```{r P3A, message=FALSE, warning=FALSE, fig.align='center'}
+educationLength = bsg_rds %>% 
+  select(idcntry:idgrade, bsbg08, itsex) %>% 
+  rename(educationLength = bsbg08) %>% 
+  mutate(educationLength = as.numeric(educationLength)) %>%
+  mutate(itsex = as.factor(itsex)) %>% 
+  filter(!is.na(educationLength), !is.na(itsex))
+
+oneway_test(
+  educationLength ~ as.factor(itsex),
+  data = educationLength,
+  alternative = 'greater'
+)
+
+```
+
+
+```{r P3B, message=FALSE, warning=FALSE, fig.align='center'}
+plotData = educationLength %>% 
+  group_by(itsex) %>% 
+  mutate(totalCount = n()) %>% 
+  group_by(itsex, educationLength, totalCount) %>% 
+  summarise(count = n()) %>% 
+  mutate(prop = count / totalCount) %>% 
+  ungroup() %>% 
+  mutate(itsex = ifelse(itsex == 1, 'Female', 'Male'))
+
+ggplot(plotData, aes(x = educationLength, fill = as.factor(itsex), y = prop)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  labs(fill = 'Gender', x = 'Expected Education Length', y = 'Proportion')
+
+hchart(plotData, type = 'bar', hcaes(x = educationLength, group = as.factor(itsex), y = prop)) %>% 
+  hc_xAxis(title = list(text = 'Expected Education Length')) %>% 
+  hc_yAxis(title = list(text = 'Proportion'))
+```

@@ -1,0 +1,396 @@
+---
+title: "Seventh Week: Generalized Linear Models"
+subtitle: "Murder or suicide"
+author: "امین رخشا ۹۵۱۰۹۳۱۵"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/giraffe-suicide-fail-cartoon.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با توجه به سوالات مرگ و میر در آمریکا به سوالات زیر پاسخ دهید.
+</p>
+
+***
+
+<p dir="RTL">
+کارهای اولیه
+</p>
+
+```{r pre, message=FALSE, warning=FALSE, fig.align='center'}
+library(readr)
+library(dplyr)
+library(reshape2)
+library(corrplot)
+library(ggplot2)
+library(ggthemes)
+library(ggrepel)
+theme_set(theme_gdocs())
+data = read_csv('murder_suicide.csv')
+```
+
+<p dir="RTL">
+۱. از میان متغیرهای داده مرگ و میر یک زیرمجموعه ایی بدون حشو در نظر بگیرید.
+ماتریس همبستگی متغیرهای مختلف را به دست آورده و سپس رسم نمایید. علاوه بر این نمودار پراکنش متغیرهای انتخاب شده را همزمان نسبت به هم رسم نمایید.
+</p>
+
+<p dir="RTL">
+برای برخی متغیرها چند ستون آمده بود. برای هر متغیر تنها یک متغیر را نگه داشتیم. همچنین ستونها اضافه هم حذف کردیم. در داده برای مقادیری که موجود نبودند در هر ستون یک مقدار خاص قرار داده شده بود که آنها را به NA تبدیل کردیم.
+</p>
+
+```{r 1, message=FALSE, warning=FALSE, fig.align='center'}
+data = data %>% 
+  select(
+    -Id,
+    -Education1989Revision, -EducationReportingFlag, 
+    -AgeSubstitutionFlag, -AgeRecode52, -AgeRecode12, -InfantAgeRecode22, -AgeRecode27,
+    -CurrentDataYear, -Icd10Code,
+    -CauseRecode358, -CauseRecode113, -InfantCauseRecode130,
+    -BridgedRaceFlag, -RaceRecode3, -Race, -RaceImputationFlag,
+    -HispanicOrigin,
+    -PlaceOfInjury,
+    -NumberOfRecordAxisConditions, -NumberOfEntityAxisConditions
+  ) %>% 
+  mutate(
+    Age = ifelse(AgeType == 9, 
+                 NA,
+                 ifelse(AgeType == 1, Age, 0)
+                 )
+  ) %>% 
+  rename (
+    Race = RaceRecode5,
+    Education = Education2003Revision,
+    CauseRecode = CauseRecode39,
+    HispanicOrigin = HispanicOriginRaceRecode
+  ) %>% 
+  select(-AgeType)
+
+data$Education[data$Education %in% c(0, 9)] = NA
+data$Age[data$Age > 150] = NA
+data$PlaceOfDeathAndDecedentsStatus[data$PlaceOfDeathAndDecedentsStatus == 9] = NA
+data$MaritalStatus[data$MaritalStatus == 'U'] = NA
+data$DayOfWeekOfDeath[data$DayOfWeekOfDeath == 9] = NA
+data$InjuryAtWork[data$InjuryAtWork == 'U'] = NA
+data$MethodOfDisposition[data$MethodOfDisposition == 'U'] = NA
+data$Autopsy[data$Autopsy == 'U'] = NA
+data$ActivityCode[data$ActivityCode == 99] = NA
+data$HispanicOrigin[data$HispanicOrigin > 990] = NA
+data$MannerOfDeath = data$MannerOfDeath - 2
+
+factorColumns = setdiff(colnames(data), 'Age')
+data[factorColumns] = lapply(data[factorColumns], factor)
+
+numericed = data
+numericed[] = lapply(data[], as.numeric)
+
+corr_mat = cor(numericed, use="pairwise.complete.obs")
+cor_sorted <- as.matrix(sort(corr_mat[,'MannerOfDeath'], decreasing = TRUE))
+CorHigh <- names(which(apply(cor_sorted, 1, function(x) TRUE)))
+corr_mat <- corr_mat[CorHigh, CorHigh]
+
+corrplot.mixed(corr_mat, tl.col="black", tl.pos = "lt", tl.cex = 0.6,
+               number.cex = 0.5, number.digits = 1, lower.col = 'black')
+
+sampled = data %>% sample_n(1000)
+pairs(sampled, pch = 19)
+```
+
+***
+
+<p dir="RTL">
+۲. اثر هر یک از متغیرهای جنسیت، نژاد،آموزش، سن و نحوه تدفین را بر مرگ یا خودکشی ارزیابی کنید.
+</p>
+
+<p dir="RTL">
+برای بررسی موثر بودن این پارامترها از Chi Squared Test استفاده می کنیم. با توجه به pvalue های به دست آمده تمام این پارامترها موثر هستند:
+</p>
+
+```{r 2, message=FALSE, warning=FALSE, fig.align='center'}
+testData = data %>% select(Sex, MannerOfDeath) %>% filter(complete.cases(.))
+chisq.test(table(testData$Sex, testData$MannerOfDeath))
+
+testData = data %>% select(Race, MannerOfDeath) %>% filter(complete.cases(.))
+chisq.test(table(testData$Race, testData$MannerOfDeath))
+
+
+testData = data %>% select(Education, MannerOfDeath) %>% filter(complete.cases(.))
+chisq.test(table(testData$Education, testData$MannerOfDeath))
+
+
+testData = data %>% select(Age, MannerOfDeath) %>% filter(complete.cases(.))
+chisq.test(table(testData$Age, testData$MannerOfDeath))
+
+testData = data %>% select(MethodOfDisposition, MannerOfDeath) %>% filter(complete.cases(.))
+chisq.test(table(testData$MethodOfDisposition, testData$MannerOfDeath))
+
+```
+
+***
+
+<p dir="RTL">
+۳. با استفاده از مدل رگرسیون لاجستیک یک مدل به داده ها برازش دهید و سپس آن را نقص یابی کنید.
+</p>
+
+<p dir="RTL">
+ابتدا با استفاده از تمام متغیرها مدل را برازش می دهیم. اما میبینیم که بسیاری از ضرایب به دست آمده significant نیستند. بنابراین تعدادی از متغیرها را حذف می کنیم.
+</p>
+
+```{r 3A, message=FALSE, warning=FALSE, fig.align='center', fig.width = 10, fig.height=10}
+modelParams = data%>% filter(complete.cases(.))
+model = glm(MannerOfDeath ~ .,
+            data = modelParams, 
+            family = "binomial")
+summary(model)
+
+modelParams = data %>%
+  select(-HispanicOrigin, -CauseRecode, - MonthOfDeath, - ActivityCode) %>%
+  filter(complete.cases(.))
+model = glm(MannerOfDeath ~ .,
+            data = modelParams, 
+            family = "binomial")
+summary(model)
+```
+
+<p dir="RTL">
+برای نقصیابی از دستور glm.diag.plot پکیج boot استفاده می کنیم. نمودار بالا سمت چپ jackknife deviance residuals در برابر fitted values است. به طور کلی این نمودار نباید الگویی داشته باشد اما استفاده از این نمودار برای مدل  bionomial ساده نیست و همیشه چنین الگویی وجود دارد که خیلی نگران کننده نیست. نمودار بالا سمت راست هم نمودار QQ برای نرمال بودن باقیمانده ی deviance استاندارد شده است. انتظار داریم نقاط رو خط کشیده شده باشند که تا حد خوبی این اتفاق افتاده است. دو نمودار پایین هم برای یافتن وجود دادهی پرت موثر بر مدل هستند. در نمودار سمت چپ محور عمودی نشان دهنده ی تاثیر مشاهده بر مدل و محور افقی نشان دهنده ی leverage نسبت به واریانس باقیمانده ها در آن نقطه است. نمودار سمت راست هم cook distance است که انتظار داریم نقاط زیر پایین ۰.۰۵ باشند که هستند. 
+</p>
+
+```{r 3B, message=FALSE, warning=FALSE, fig.align='center'}
+data = modelParams
+
+library(boot)
+diag = glm.diag(model)
+glm.diag.plots(model, diag)
+```
+
+***
+
+<p dir="RTL">
+۴. با استفاده از سه نمودار خروجی مدل را نسبت به داده واقعی ارزیابی کنید.
+</p>
+
+<p dir="RTL">
+۳ نمودار را می توانید در زیر ببینید
+</p>
+
+```{r 4, message=FALSE, warning=FALSE, fig.align='center'}
+yHat = predict.glm(model, type = 'response')
+plotData <- data.frame(yHat, MannerOfDeath = ifelse(data$MannerOfDeath == 0, "0 (Suicide)", "1 (Homicide)"))
+plotData %>% 
+  ggplot(aes(x = yHat, color = MannerOfDeath)) +
+  geom_density() +
+  labs(x = 'Predict', y = 'density')
+
+ggplot(plotData, aes(x = MannerOfDeath, y = yHat, color = MannerOfDeath)) +
+  geom_boxplot() +
+  labs(x = 'Actual', y = 'Prediction') +
+  guides(color = F)
+
+plotData <- data.frame(Age = data$Age, yHat, MannerOfDeath = ifelse(data$MannerOfDeath == 0, "0 (Suicide)", "1 (Homicide)"))
+ggplot(plotData, aes(x = Age, y = yHat, color = MannerOfDeath)) +
+  geom_jitter(size = 0.1) +
+  labs(x = 'Age', y = 'Prediction', title = 'Prediction By Age') 
+```
+
+***
+
+<p dir="RTL">
+۵. ابتدا ۲۰ درصد داده را به صورت تصادفی به عنوان تست در نظر بگیرید. مدل را با استفاده از ۸۰ درصد باقی مانده برازش دهید. با استفاده از پارامتر قطع ۰.۵ نتایج را برای داده تست پیش بینی کنید. سپس کمیت های زیر را محاسبه کنید.
+</p>
+
+* P: positive samples
+* N: negative samples
+* TP: true positive TP (eqv. with hit)
+* TN: true negative (eqv. with correct rejection)
+* FP: false positive (eqv. with false alarm, Type I error)
+* FN: false negative (eqv. with miss, Type II error)
+* Accuracy (ACC) ACC = (TP+TN)/(P+T)
+* False positive rate (FPR): 1- TN/N
+* True positive rate (TPR): TP/P
+
+<p dir="RTL">
+مشابه آنچه در کلاس گفته شد نمایشی از  چهار کمیت 
+TN, TP,FP,FN
+به همراه داده ها رسم نمایید.
+</p>
+
+
+```{r 5, message=FALSE, warning=FALSE, fig.align='center'}
+trainIndexes = sample(1:nrow(data), 0.8 * nrow(data), replace = F)
+train = data[trainIndexes,]
+test = data[-trainIndexes,]
+model2 = glm(MannerOfDeath ~ .,
+             data = train, 
+             family = "binomial")
+predict = predict.glm(model2, newdata = test, type = 'response')
+y = as.numeric(as.character(test$MannerOfDeath))
+yHat = ifelse(predict > 0.5, 1, 0)
+
+P <- sum(y)
+paste('P: ', P)
+
+N <- sum(y == 0)
+paste('N: ', N)
+
+TP <- sum(yHat == 1 & y == 1)
+paste('TP: ', TP)
+
+TN <- sum(yHat == 0 & y == 0)
+paste('TN: ', TN)
+
+FP <- sum(yHat == 1 & y == 0)
+paste('FP: ', FP)
+
+FN <- sum(yHat == 0 & y == 1)
+paste('FN: ', FN)
+
+ACC <- (TP + TN) / (P + N)
+paste('ACC: ', ACC)
+
+FPR <- 1 - TN / N
+paste('FPR: ', FPR)
+
+TPR <- TP / P
+paste('TPR: ', TPR)
+
+library(data.table)
+ConfusionMatrixInfo <- function( data, predict, actual, cutoff )
+{	
+  # extract the column ;
+  # relevel making 1 appears on the more commonly seen position in 
+  # a two by two confusion matrix	
+  predict <- data[[predict]]
+  actual  <- relevel( as.factor( data[[actual]] ), "1" )
+  
+  result <- data.table( actual = actual, predict = predict )
+  
+  # caculating each pred falls into which category for the confusion matrix
+  result[ , type := ifelse( predict >= cutoff & actual == 1, "TP",
+                            ifelse( predict >= cutoff & actual == 0, "FP", 
+                                    ifelse( predict <  cutoff & actual == 1, "FN", "TN" ) ) ) %>% as.factor() ]
+  labels = result %>% 
+    group_by(type) %>% 
+    summarise(count = n(), actual = first(actual), predict = median(predict))
+  # jittering : can spread the points along the x axis 
+  plot <- ggplot( result, aes( actual, predict, color = type ) ) + 
+    geom_violin( fill = "orange", color = NA ) +
+    geom_jitter( shape = 1 ) + 
+    geom_hline( yintercept = cutoff, color = "blue", alpha = 0.6 ) + 
+    geom_label(data = labels, aes( actual, predict, label = count, color = type)) +
+    scale_y_continuous( limits = c( 0, 1 ) ) + 
+    scale_color_discrete( breaks = c( "TP", "FN", "FP", "TN" ) ) + # ordering of the legend 
+    guides( col = guide_legend( nrow = 2 ) ) + # adjust the legend to have two rows  
+    ggtitle( sprintf( "Confusion Matrix with Cutoff at %.2f", cutoff ) )
+  
+  return( list( data = result, plot = plot ) )
+}
+
+plotData = data.frame(manner = y, prediction = predict)
+cm_info = ConfusionMatrixInfo( data = plotData, predict = "prediction", 
+                              actual = "manner", cutoff = .5 )
+cm_info$plot
+
+table(data$MannerOfDeath,ifelse(fitted(model)>0.5,1,0)) %>% 
+  plot(main = 'Model Results for 0.5 cutoff', xlab = 'Actual', ylab = 'Prediction')
+```
+
+***
+
+<p dir="RTL">
+۶. نمودار صحت مدل (accuracy) را بر حسب مقادیر مختلف قطع برای داده تست رسم نمایید. کدام پارامتر قطع بالاترین صحت را در پیش بینی داراست؟
+</p>
+
+<p dir="RTL">
+مرز ۰.۴۹۷ بهترین صحت را با ۸۴.۸۵ درصد صحت دارد.
+</p>
+
+```{r 6, message=FALSE, warning=FALSE, fig.align='center'}
+cutoff = seq(0, 1, 0.001)
+acc = sapply(cutoff, function(c) {
+  TP <- sum(predict >= c & y == 1)
+  TN <- sum(predict < c & y == 0)
+  return( (TP + TN) / (P + N) )
+})
+
+ggplot(data.frame(acc, cutoff), aes(x = cutoff, y = acc)) +
+  geom_line()
+
+bestIndex <- which.max(acc)
+paste('Cutoff:', cutoff[bestIndex],
+      'Acc:', acc[bestIndex])
+```
+
+***
+
+<p dir="RTL">
+۷. نمودار 
+ROC
+ را برای داده های قسمت قبل رسم نمایید. همچنین نقطه مربوط به بهترین پارامتر قطع را مشخص نمایید.
+</p>
+
+
+```{r 7, message=FALSE, warning=FALSE, fig.align='center'}
+TPR = sapply(cutoff, function(c) {
+  return (sum(y == 1 & predict >= c) / sum(y == 1))
+})
+
+FPR = sapply(cutoff, function(c) {
+  return (sum(y == 0 & predict >= c) / sum(y == 0))
+})
+
+plotData = data.frame(FPR, TPR)
+
+bestPoint <- data.frame(x = FPR[bestIndex], y = TPR[bestIndex])
+ggplot(plotData, aes(x = FPR, y = TPR)) +
+  geom_point(size = 0.3) +
+  geom_point(data = bestPoint, aes(x, y), color = 'red', size = 2) +
+  geom_label_repel(data = bestPoint, aes(x, y), label = "best point",
+                   size = 4, box.padding = 0.25, nudge_x = 0.2) +
+  geom_line()
+
+```
+
+***
+
+<p dir="RTL">
+۸. با قرار دادن کمیت 
+nfolds = 5
+و با استفاده از 
+H20
+مدل مساله را بسازید و نتیجه حاصل را ارزیابی کنید.
+</p>
+
+<p dir="RTL">
+برای ارزیابی، همان مقدایر سوال ۵ را استفاده می کنیم که با دستور h2o.confusionMatrix در دسترس است.
+</p>
+
+```{r 8, message=FALSE, warning=FALSE, fig.align='center'}
+library(h2o)
+h2o.init()
+hdata = as.h2o(data)
+hmodel = h2o.glm(x = setdiff(colnames(data), c('MannerOfDeath' , 'CauseRecode', 'MonthOfDeath', 'ActivityCode')),
+                 y = 'MannerOfDeath',
+                 training_frame = hdata, 
+                 family = "binomial",
+                 nfolds = 5)
+h2o.confusionMatrix(hmodel)
+
+```
+
+***
+
+<p dir="RTL"> 
+۹. آیا ما میتوانیم سرویسی به قضات ارایه کنیم تا با استفاده از اطلاعات مرگ بتوانند موارد مشکوک به قتل را از خودکشی تفکیک دهند؟
+</p>
+
+<p dir="RTL">
+حداقل با این روش و با استفاده از این داده ها نمی توان این کار را کرد. قضاوت موضوع حساس است و برای استفاده از یک مدل آماری باید دقت آن بسیار بسیار بالا باشد و مثلا در هر ۱۰۰۰۰۰ نفر یک اشتباه داشته باشد. اما در این جا ۷ درصد خودکشی ها را قتل پیشبینی کرده ایم که اگر منجر با مجازات فردی شود اصلا قابل قبول نیست.
+</p>
+
+

@@ -1,0 +1,513 @@
+---
+title: "Tenth Week: Principal Component Analysis and Factor Analysis"
+subtitle: "PCA Stock, image, ..."
+author: "امین رخشا ۹۵۱۰۹۳۱۵"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/stock.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با استفاده از داده های OHLCV شرکت های تشکیل دهنده شاخص s&p500 و همچنین داده مربوط به شاخص های اقتصادی به سوالات زیر پاسخ دهید.
+</p>
+
+***
+
+<p dir="RTL">
+کارهای اولیه
+</p>
+
+```{r pre, message=FALSE, warning=FALSE, fig.align='center'}
+library(stringr)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(highcharter)
+library(ggplot2)
+library(knitr)
+theme_set(theme_minimal())
+```
+
+<p dir="RTL">
+۱. چه شرکتی رکورددار کسب بیشترین سود در بازه یکساله، دو ساله و پنج ساله می باشد؟ این سوال را برای بخش های مختلف مورد مطالعه قرار دهید و رکورددار را معرفی کنید. (برای این کار به ستون sector داده constituents مراجعه کنید.) برای هر دو قسمت نمودار سود ده شرکت و یا بخش برتر را رسم نمایید.
+</p>
+
+<p dir="RTL">
+سود را تغییر در Adj Close در نظر می&zwnj;گیریم. در جدول&zwnj;ها شرکت و بخش برتر آورده شده&zwnj;اند.  بقیه&zwnj;ی نیز در نمودار آمده&zwnj;اند.
+</p>
+
+```{r q1, message=FALSE, warning=FALSE, fig.align='center'}
+paths = list.files('data/stock_dfs', full.names = T)
+names = list.files('data/stock_dfs', full.names = F) %>% 
+  str_replace('.csv', '') 
+dfs = list()
+for(i in 1:length(paths)) {
+  df = read_csv(paths[[i]]) %>% 
+    mutate(Symbol = names[[i]])
+  dfs[[i]] = df
+  # print(names[[i]])
+}
+data = bind_rows(dfs)
+
+data$Symbol[data$Symbol == 'BRK-B'] = 'BRK.B'
+data$Symbol[data$Symbol == 'BF-B'] = 'BF.B'
+
+
+constituents = read_csv('data/constituents.csv')
+
+data = data %>% 
+  left_join(constituents) %>% 
+  mutate(Name = ifelse(is.na(Name), Symbol, Name))
+
+monthData = data %>% 
+  mutate(month = as.integer(format(Date, '%m')) + (as.integer(format(Date, '%Y')) - 2000 )* 12) %>% 
+  arrange(Date) %>% 
+  group_by(Symbol, Symbol, Sector, Name, month) %>% 
+  summarise(Value = first(`Adj Close`)) %>% 
+  ungroup()
+
+growths = monthData %>% 
+  group_by(Symbol, Sector, Name) %>% 
+  mutate(oneYearAgo = lag(Value, n = 12),
+         twoYearAgo = lag(Value, n = 24),
+         fiveYearAgo = lag(Value, n = 60)) %>% 
+  mutate(`1 year` = Value - oneYearAgo,
+         `2 years` = Value - twoYearAgo,
+         `5 years` = Value - fiveYearAgo)
+records = growths %>% 
+  gather(key = 'period', value = 'growth', 9:11) %>% 
+  arrange(desc(growth)) %>% 
+  group_by(period, Name) %>% 
+  top_n(1, wt = growth) %>% 
+  ungroup() %>% 
+  select(Name, period, growth)
+
+topRecords = records %>% 
+  group_by(period) %>% 
+  top_n(1, growth)
+kable(topRecords)
+
+top10records = records %>% 
+  group_by(period) %>% 
+  top_n(10, growth)
+
+ggplot(top10records, aes(x = reorder(Name, growth), y = growth, fill = 1)) +
+  geom_bar(stat = 'identity') +
+  facet_grid(~period, scale = 'free') +
+  theme(axis.text.x = element_text(angle = 50, hjust = 1)) +
+  guides(fill = F) +
+  xlab('Name')
+
+
+sectorGrowths = monthData %>% 
+  filter(!is.na(Sector)) %>% 
+  mutate(oneYearAgo = lag(Value, n = 12),
+         twoYearAgo = lag(Value, n = 24),
+         fiveYearAgo = lag(Value, n = 60)) %>% 
+  group_by(Sector, month) %>% 
+  summarise(`1 year` = sum(Value - oneYearAgo),
+            `2 years` = sum(Value - twoYearAgo),
+            `5 years` = sum(Value - fiveYearAgo))
+sectorRecords = sectorGrowths %>% 
+  gather(key = 'period', value = 'growth', 3:5) %>% 
+  arrange(desc(growth)) %>% 
+  group_by(period, Sector) %>% 
+  top_n(1, growth) %>% 
+  ungroup() %>% 
+  select(Sector, period, growth)
+
+topSectorRecords = sectorRecords %>% 
+  group_by(period) %>% 
+  top_n(1, growth)
+
+kable(topSectorRecords)
+
+top10SectorRecords = sectorRecords %>% 
+  group_by(period) %>% 
+  top_n(10, growth)
+
+ggplot(top10SectorRecords, aes(x = reorder(Sector, growth), y = growth, fill = 1)) +
+  geom_bar(stat = 'identity') +
+  facet_grid(~period, scale = 'free') +
+  theme(axis.text.x = element_text(angle = 50, hjust = 1)) +
+  guides(fill = F) +
+  xlab('Sector')
+
+```
+
+
+***
+
+<p dir="RTL">
+۲. یک اعتقاد خرافی می گوید خرید سهام در روز سیزدهم ماه زیان آور است. این گزاره را مورد ارزیابی قرار دهید.
+</p>
+
+<p dir="RTL">
+اعداد Close و Open مربوط به روز سیزدهم ماه&zwnj;ها را با Wilcoxon test مقایسه می&zwnj;کنیم. اگر در این روز بیشتر ضرر کنیم تا سود، Close باید به طور معنی&zwnj;داری کمتر باشد. اما pvalue چنین چیزی را تایید نمی&zwnj;کند.
+</p>
+
+```{r q2, message=FALSE, warning=FALSE, fig.align='center'}
+thirteen = data %>% filter(as.integer(format(Date, "%d")) == 13) %>% 
+  select(Open, Close)
+
+wilcox.test(thirteen$Open, thirteen$Close, alternative = 'greater')
+
+
+```
+
+***
+
+<p dir="RTL">
+۳. رکورد بیشترین گردش مالی در تاریخ بورس برای چه روزی بوده است و چرا!!!
+</p>
+
+<p dir="RTL">
+این رکورد مربوط به ۲۴ آگست سال ۲۰۱۵ بوده&zwnj;است. همان طور که در اینجا گفته شده است، دلیل این موضوع این بوده که بازارهای چین در دوشنبه قبل آن سقوط زیادی داشت که به دوشنبه&zwnj;ی سیاه معروف شده است. البته دلایل دیگری هم مانند سقوط بازارها اروپا مانند آلمان و کاهش نرخ بهره در آمریکا هم وجود داشته است.
+</p>
+
+
+```{r q3, message=FALSE, warning=FALSE, fig.align='center'}
+
+tradeVolume = data %>% 
+  group_by(Date) %>% 
+  summarise(tradeVolume = sum(Volume * `Adj Close`)) %>% 
+  arrange(tradeVolume) %>% 
+  top_n(10, wt = tradeVolume)
+
+hchart(tradeVolume, type = 'column', hcaes(x = as.factor(Date), y = tradeVolume), name = 'Volume') %>% 
+  hc_xAxis(title = list(text = 'Date'))
+
+```
+
+***
+
+<p dir="RTL">
+۴. شاخص AAPL که نماد شرکت اپل است را در نظر بگیرید. با استفاده از رگرسیون خطی یک پیش کننده قیمت شروع (open price) بر اساس k روز قبل بسازید. بهترین انتخاب برای k چه مقداری است؟ دقت پیش بینی شما چقدر است؟
+</p>
+
+<p dir="RTL">
+کمترین خطا را k = 12 دارد و خطای mse آن ۱۱۳ است.
+</p>
+
+```{r q4A, fig.align='center', message=FALSE, warning=FALSE, results="hide"}
+apple = data %>% filter(Symbol == 'AAPL')
+kvalues = 1:15
+set.seed(17)
+error = numeric(length(kvalues))
+model = list()
+library(h2o)
+h2o.init()
+for(k in kvalues) {
+  modelData = apple %>% 
+    arrange(Date) %>% 
+    slice(1:(nrow(apple) - nrow(apple) %% (k + 1))) %>% 
+    .$Open %>% 
+    matrix(ncol = k + 1, byrow = T) %>% 
+    as.data.frame()
+  colnames(modelData) = c(paste('day', 1:k), 'final')
+  model[[k]] = h2o.glm(y = 'final', x = paste('day', 1:k),
+                       training_frame = as.h2o(modelData), nfolds = 5)
+  error[k] = h2o.mse(model[[k]], xval = T)
+}
+```
+
+```{r q4B, fig.align='center', message=FALSE, warning=FALSE}
+ggplot(data.frame(k = kvalues, error), aes(x = k, y = error)) + 
+  geom_point() +
+  geom_line() +
+  theme_minimal()
+
+paste('Min Error is for k =', which.min(error), 'with mse =', error[which.min(error)])
+
+
+```
+
+
+***
+
+<p dir="RTL">
+۵. بر روی داده های قیمت شروع شرکت ها الگوریتم pca را اعمال کنید. نمودار تجمعی درصد واریانس بیان شده در مولفه ها را رسم کنید. سه مولفه اول چند درصد از واریانس را تبیین می کند؟
+</p>
+
+```{r q5, message=FALSE, warning=FALSE, fig.align='center'}
+pcaData = data_frame(Date = dfs[[1]]$Date)
+for(i in 1:length(paths)) {
+  selectedDF = dfs[[i]] %>% 
+    select(Date, Open)
+  colnames(selectedDF)[2] = names[[i]]
+  pcaData = full_join(pcaData, selectedDF)
+  # print(names[[i]])
+}
+
+numberOfNAs = lapply(pcaData[], function(x){sum(is.na(x))}) %>% unlist()
+pcaData = pcaData[,numberOfNAs < 500]
+pcaData = pcaData[complete.cases(pcaData),]
+pca = prcomp(pcaData %>% select(-Date))
+vars = pca$sdev^2
+cumvar = cumsum(vars) / sum(vars)
+
+plotData = data.frame(n = 1:50, variance = cumvar[1:50])
+hchart(plotData, type = 'line', hcaes(x = n, y = variance), name = 'Variance') 
+
+paste('Variance for 3 first components:', round(cumvar[3] * 100, 2), "%")
+
+```
+
+***
+
+<p dir="RTL">
+۶. برای هر نماد اطلاعات بخش مربوطه را از داده constituents استخراج نمایید. برای هر بخش میانگین روزانه قیمت شروع شرکت های آن را محاسبه کنید. سپس با استفاده از میانگین به دست آمده  داده ایی با چند ستون که هر ستون یک بخش و هر سطر یک روز هست بسازید. داده مربوط را با داده شاخص های اقتصادی ادغام کنید. بر روی این داده pca بزنید و نمودار biplot آن را تفسیر کنید.
+</p>
+
+<p dir="RTL">
+چون بخش زیادی از واریانس را این دو مولفه پوشش می&zwnj;دهند، می&zwnj;توان گفت که نقاط تقریبا در این صفحه هستند. همانطور که میبینیم تعداد زیادی از پارمترها هم راستا هستند. یعنی مقدار آن&zwnj;ها وابسته است. همچنین از روی اندازه&zwnj;ی بردار&zwnj;ها می&zwnj;توان میزان تفاوت آن&zwnj;ها در روزها را فهمید. دسته&zwnj;های کلی روز&zwnj;ها هم معلوم هستند. روزهای با financial  و PE10 بالا ، consumer price index  بالا و غیره 
+</p>
+
+```{r q6, message=FALSE, warning=FALSE, fig.align='center'}
+stocksData = data %>% 
+  group_by(Date, Sector) %>% 
+  summarize(Open = mean(Open)) %>% 
+  spread(key = 'Sector', value = 'Open') %>% 
+  select(-`<NA>`) %>% 
+  ungroup()
+
+indexes = read_csv('data/indexes.csv')
+stocksData = stocksData %>% 
+  left_join(indexes) %>% 
+  na.omit() 
+
+stocksPCA = prcomp(stocksData %>% select(-Date), scale = T)
+
+library(ggbiplot)
+ggbiplot(stocksPCA, 1:2) +
+  theme_minimal()
+
+
+```
+
+***
+
+<p dir="RTL">
+۷. روی همه اطلاعات (OHLCV) سهام اپل الگوریتم PCA را اعمال کنید. سپس از مولفه اول برای پیش بینی قیمت شروع سهام در روز آینده استفاده کنید. به سوالات سوال ۴ پاسخ دهید. آیا استفاده از مولفه اول نتیجه بهتری نسبت به داده open price برای پیش بینی قیمت دارد؟
+</p>
+
+<p dir="RTL">
+بله خطا مقداری کمتر می&zwnj;شود.
+</p>
+
+```{r q7A, message=FALSE, warning=FALSE, fig.align='center', results="hide"}
+applePCA = prcomp(apple %>% select(Open, High, Low, Close, Volume), scale = T)
+appleFirstPCA = data.frame(Date = apple$Date, PC1 = applePCA$x[,1])
+kvalues = 1:15
+set.seed(17)
+error = numeric(length(kvalues))
+model = list()
+for(k in kvalues) {
+  finals = apple %>% 
+    filter(row_number() %% (k+1) == 0) %>% 
+    .$Open
+  modelData = appleFirstPCA %>% 
+    arrange(Date) %>% 
+    slice(1:(nrow(appleFirstPCA) - nrow(appleFirstPCA) %% (k + 1))) %>% 
+    .$PC1 %>% 
+    matrix(ncol = k + 1, byrow = T) %>% 
+    as.data.frame()
+  colnames(modelData) = c(paste('day', 1:k), 'final')
+  modelData$final = finals
+  model[[k]] = h2o.glm(y = 'final', x = paste('day', 1:k), family = 'gaussian',
+                       training_frame = as.h2o(modelData), nfolds = 5)
+  error[k] = h2o.mse(model[[k]], xval = T)
+}
+# error
+
+```
+
+```{r q7B, fig.align='center', message=FALSE, warning=FALSE}
+ggplot(data.frame(k = kvalues, error), aes(x = k, y = error)) + 
+  geom_point() +
+  geom_line() +
+  theme_minimal()
+
+paste('Min Error is for k =', which.min(error), 'with mse =', error[which.min(error)])
+
+
+```
+
+***
+
+<p dir="RTL">
+۸. نمودار سود نسبی شاخص s&p500 را رسم کنید. آیا توزیع سود نرمال است؟(از داده indexes استفاده کنید.)
+با استفاده از ده مولفه اول سوال پنج آیا می توانید سود و ضرر شاخص s&p500 را برای روز آينده پیش بینی کنید؟ از یک مدل رگرسیون لاجستیک استفاده کنید. درصد خطای پیش بینی را به دست آورید.
+</p>
+
+<p dir="RTL">
+با استفاده از نمودار qq میبینم که نقطه&zwnj;ها تا حد خوبی رو خط قرار دارند. پس تا حدی نرمال هست.
+برای بخش بعدی مشکلی که وجود داشت این بود که داده&zwnj;ی sp500 تنها برای روز اول هر ماه موجود بود. برای همین با استفاده از ۱۰ مولفه مربوط به روز آخر مجبور بودیم این که sp500 روز بعد از ماه قبل بهتر است یا نه را پیشبینی کنیم. میبینم که خطا زیاد است و خیلی خوب نیست.
+</p>
+
+```{r q8, message=FALSE, warning=FALSE, fig.align='center'}
+sp500 = indexes %>% 
+  select(Date, SP500) %>% 
+  mutate(diff = (SP500 - lag(SP500)) / lag(SP500)) %>% 
+  mutate(result = ifelse(diff > 0, 1, 0))
+ggplot(sp500, aes(x = diff)) +
+  geom_density() +
+  xlim(-25, 25)
+
+qqnorm(sp500$diff)
+qqline(sp500$diff)
+
+
+
+sp500resultPrediction = 
+  cbind(data.frame(Date = pcaData$Date),
+                   pca$x[,1:10]) %>% 
+  inner_join(sp500 %>% select(Date, result)) %>% 
+  na.omit()
+
+trainIndexes = sample(1:nrow(sp500resultPrediction), nrow(sp500resultPrediction) * 4 / 5)
+train = sp500resultPrediction %>% slice(trainIndexes)
+test = sp500resultPrediction %>% slice(-trainIndexes)
+sp500predictionModel = glm(result ~ .,
+                            train %>% select(-Date),
+                            family = 'binomial')
+
+y = test$result
+yhat = predict.glm(sp500predictionModel, test, type = 'response')
+thresholds = seq(0, 1, 0.005)
+predPerformance = data.frame()
+for(t in thresholds) {
+  E1 = sum(y == 1 & yhat < t) / sum(y == 1)
+  E2 = sum(y == 0 & yhat > t) / sum(y == 0)
+  ACC = 1 - (E1 * sum(y == 1) + E2 * sum(y == 0)) / length(y)
+  predPerformance = rbind(predPerformance, data.frame(threshold = t, E1, E2, ACC))
+}
+
+bestIndex = which.max(predPerformance$ACC)
+paste('ACC =', predPerformance[bestIndex,]$ACC, 'for threshold =', predPerformance[bestIndex,]$threshold)
+
+
+
+
+```
+
+***
+
+<p dir="RTL"> 
+۹. عکسی که در ابتدای متن آمده را در نظر بگیرید. با استفاده از pca عکس را فشرده کنید. سپس نمودار حجم عکس فشرده بر حسب تعداد مولفه اصلی را  رسم کنید. بهترین انتخاب برای انتخاب تعداد مولفه ها در جهت فشرده سازی چه عددی است؟
+</p>
+
+
+<p dir="RTL">
+برای فشرده سازی عکس رنگی، باید هر یک از رنگ&zwnj;ها را جدا فشرده کنیم. مشکل این روش برای عکس رنگی این است که تعدادی نقطه به علت خطا در یک رنگ به وجود می&zwnj;اید که در حالت سیاه سفید اینقدر مشهود نیست. همانطور که در گیف می بینید این نقاط تا ۳۰۰ مولفه هم باقی می&zwnj;مانند. از طرفی برای نگهداری عکس فشرده شده باید برای هر ستون به مقدار مولفه&zwnj;ها و مقدار مولفه&zwnj;ها را برای بازگرداندن به عکس اصلی نگه داریم. در این جا تا ۲۴۸ مولفه حجم کاهش می&zwnj;یابد اما می&zwnj;بینیم که برای عکس دلخواه به بیشتر از این تعداد نیاز است و اصلا این روش برای عکس رنگی مناسب نیست. اما بهترین تعداد حدود ۸۰ است که نقاط تا حد زیادی کم شده اند.
+</p>
+
+```{r q8A, message=FALSE, warning=FALSE, fig.align='center'}
+library(EBImage)
+library(jpeg)
+pic = flip(readImage("stock.jpg"))
+
+pic.r = pic[,,1]
+pic.g = pic[,,2]
+pic.b = pic[,,3]
+
+pic.r.pca = prcomp(pic.r, center = F)
+pic.g.pca = prcomp(pic.g, center = F)
+pic.b.pca = prcomp(pic.b, center = F)
+
+pca = list(pic.r.pca, pic.g.pca, pic.b.pca)
+
+nValues = seq(3, ncol(pic.r), by = 3)
+```
+
+```{r q8B, message=FALSE, warning=FALSE, fig.align='center', eval=FALSE}
+compressed_img = list()
+for(n in nValues) {
+  print(n)
+  compressed_img[[n]] = sapply(pca, function(p) {
+    p$x[ ,1:n] %*% t(p$rotation[,1:n])
+  }, simplify = 'array')
+  writeJPEG(rotate(compressed_img[[n]], angle = 90),
+            paste('compressed/', n, '_components.jpg', sep = ''),
+            quality = 1)
+}
+
+```
+
+```{r q8C, message=FALSE, warning=FALSE, fig.align='center'}
+calc_size = function(n) {
+  data_size = nrow(pic.r) * n
+  rotation_size = ncol(pic.r) * n
+  (data_size + rotation_size) / 1000 * 3
+}
+originalSize = nrow(pic.r) * ncol(pic.r) * 3 / 1000
+compressed_info = data.frame(components = nValues, size = calc_size(nValues))
+intersection.point = round(originalSize / (compressed_info[1,]$size / compressed_info[1,]$components))
+ggplot(compressed_info, aes(x = components, y = size, color = 1)) +
+  geom_line() +
+  geom_hline(yintercept = originalSize, color = 'red') +
+  geom_vline(xintercept = intersection.point, color = 'red', linetype = 2) +
+  geom_text(data = data.frame(x = 40, y = originalSize), aes(x, y + 50),
+            label = 'Original Size',
+            color = 'red') +
+  geom_text(data = data.frame(x = intersection.point, y = 60), aes(x + 15, y),
+            label = intersection.point,
+            color = 'red') +
+  guides(color = F) +
+  labs(y = 'Size(KB)')
+```
+
+```{r q9, message=FALSE, warning=FALSE, fig.align='center', eval=FALSE}
+library(animation)
+library(imager)
+
+saveGIF({
+  for (n in nValues) {
+    print(n)
+    path <- paste('compressed/', n, '_components.jpg', sep='')
+    image <- load.image(path)
+    plot(image, main = paste('Number of components =', n), axes = F)
+  }
+  },
+  interval = 0.2
+)
+
+
+```
+
+<div align="center">
+<img  src="animation.gif"  align = 'center'>
+</div>
+
+***
+
+<p dir="RTL"> 
+۱۰. پنج ایده جالبی که روی داده های مالی بالا می توانستیم پیاده کنیم را بیان کنید. (ایده کافی است نیازی به محاسبه بر روی داده نیست.)
+</p>
+
+<p dir="RTL">
+۱. در طول زمان رشد ارزش شرکت&zwnj;های بخش&zwnj;های مختلف چطور بوده است؟
+</p>
+
+<p dir="RTL">
+۲. همبستگی میان ارزش کدام جفت شرکتا زیاد (نزدیک ۱) و یا کم (نزدیک -۱) است؟ چرا؟
+</p>
+
+<p dir="RTL">
+۳. رکورد سقوط / صعود نسبی ارزش در یک روز برای کدام شرکت و چه روزی بوده است؟ چه اتفاقی افتاده است؟
+</p>
+
+<p dir="RTL">
+۴. حجم تبادلات در کدام بخش ها بیشتر است؟
+</p>
+
+<p dir="RTL">
+۵. همبستگی میان ارزش کدام جفت بخش&zwnj;ها زیاد (نزدیک ۱) و یا کم (نزدیک -۱) است؟ چرا؟
+</p>
+

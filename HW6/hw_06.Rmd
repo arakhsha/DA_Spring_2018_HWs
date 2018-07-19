@@ -1,0 +1,416 @@
+---
+title: "Sixth Week: Linear Models"
+subtitle: "House price prediction"
+author: "امین رخشا ۹۵۱۰۹۳۱۵"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/house.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با توجه به داده های قیمت منازل
+لطفا با سوالات زیر پاسخ دهید.
+</p>
+
+***
+
+<p dir="RTL">
+کارهای اولیه
+</p>
+
+```{r pre, message=FALSE, warning=FALSE, fig.align='center'}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(psych)
+library(reshape2)
+library(corrplot)
+library(ggplot2)
+library(ggthemes)
+theme_set(theme_gdocs())
+house = read_csv('train.csv') %>% select(-Id)
+```
+
+
+<p dir="RTL">
+۱. ماتریس همبستگی متغیرهای مختلف را به دست آورده و سپس رسم نمایید.
+اعداد به دست آمده را با آزمون فرض معناداری همبستگی بسنجید و سپس ده متغیری که همبستگی بالاتری با قیمت دارند را مشخص نمایید.
+</p>
+
+
+<p dir="RTL">
+با توجه به این که همبستگی بین متغیرهای عددی تعریف می شود، تنها این متغیرها را نگه می داریم. البته می توان مانند کاری که در ساخت مدل با متغیرهای کیفی می کنیم یعنی ساخت تعدادی متغیر جدید برای هر مقدار را انجام دهیم ولی همبستگی برای متغیر با دو مقدار ۰ و ۱ هم جالب نیست. نتیجه محاسبه ماتریس همبستگی را در زیر می بینید:
+</p>
+
+```{r 1A, message=FALSE, warning=FALSE, fig.align='center', fig.width = 10, fig.height=10}
+numericVarnames = colnames(house)[sapply(house, typeof) == 'integer']
+numericVars = house %>% 
+  select(numericVarnames)
+
+corr_mat = cor(numericVars, use="pairwise.complete.obs")
+#sort on decreasing correlations with SalePrice
+cor_sorted <- as.matrix(sort(corr_mat[,'SalePrice'], decreasing = TRUE))
+#select only high corelations
+CorHigh <- names(which(apply(cor_sorted, 1, function(x) TRUE)))
+corr_mat <- corr_mat[CorHigh, CorHigh]
+
+p_mat = corr_mat
+for(varName1 in numericVarnames) {
+  for(varName2 in numericVarnames) {
+    p_mat[varName1, varName2] = cor.test(numericVars[[varName1]], numericVars[[varName2]])$p.value
+  }
+}
+
+
+corrplot.mixed(corr_mat, tl.col="black", tl.pos = "lt", tl.cex = 0.8,
+               number.cex = 0.5, number.digits = 1, lower.col = 'black')
+
+
+```
+
+<p dir="RTL">
+با استفاده از cor.test تمام این ضرایب را بررسی می کنیم. نتیجه ی دقیق در ماتریس p_mat در دسترس است. نتیجه نهایی در مورد این که هر ضریب در چه significance level ی قرار دارد را در زیر می بینید.
+</p>
+
+```{r 1B, message=FALSE, warning=FALSE, fig.align='center', fig.width = 10, fig.height=10}
+corrplot(corr_mat, p.mat = p_mat, tl.col="black", sig.level = c(.001, .01, .05), tl.cex = 0.8,
+         insig = "label_sig", pch.cex = .5, type = 'upper', method = 'color',
+         number.cex = 0.5, number.digits = 1, lower.col = 'black')
+```
+
+<p dir="RTL">
+۱۰ متغیر با بیشترین همبستگی را جدا و برای بررسی دقیقتر ماتریس همبستگی آنها را میکشیم:
+</p>
+
+```{r 1C, message=FALSE, warning=FALSE, fig.align='center'}
+corr_tidy = melt(corr_mat)
+topVarsCor = corr_tidy %>% 
+  filter(Var2 == 'SalePrice', Var1 != 'SalePrice') %>% 
+  arrange(desc(value)) %>% 
+  slice(1:10) %>% 
+  select(var = Var1, cor = value)
+
+topVars = as.character(topVarsCor$var)
+
+selected = house %>% select(topVars, SalePrice)
+
+selected_corr_mat = cor(selected)
+corrplot.mixed(selected_corr_mat, tl.col="black", tl.pos = "lt", tl.cex = 0.8,
+               number.cex = 0.5, number.digits = 1, lower.col = 'black')
+
+```
+
+***
+
+<p dir="RTL">
+۲. در یک تصویر نمودار پراکنش دو به دو ده متغیر بدست آمده به همراه قیمت را رسم نمایید و هم خطی بودن متغیرها را بررسی کنید
+</p>
+
+<p dir="RTL">
+تمام نمودارها را می کشیم:
+</p>
+
+```{r 2A, message=FALSE, warning=FALSE, fig.align='center'}
+pairs(selected, pch = 19, cex = 0.5)
+```
+
+<p dir="RTL">
+می بینیم که بعضی متغیرها رابطه خطی زیادی دارند. مانند مساحت زیرزمین و مساحت طبقه اول. برای بررسی دقیقتر از تست omcdiag استفاده میکنیم. این تست هم وجود هم خطی بین بعضی از متغیرها را تایید می کند.
+</p>
+
+```{r 2B, message=FALSE, warning=FALSE, fig.align='center'}
+library(mctest)
+omcdiag(selected %>% select(-SalePrice), selected %>% select(SalePrice))
+```
+
+***
+
+<p dir="RTL">
+۳. یک مدل خطی بر اساس ده متغیر برای پیش بینی قیمت برازش دهید. و سپس خلاصه نتایج مدل را به دست آورید.
+</p>
+
+<p dir="RTL">
+با دستور lm مدل را محاسبه می کنیم
+</p>
+
+```{r 3, message=FALSE, warning=FALSE, fig.align='center'}
+model1 = lm(data = selected,
+            SalePrice ~ . )
+summary(model1)
+```
+
+***
+
+<p dir="RTL">
+۴. نمودار قیمت واقعی و قیمت پیش بینی را رسم نمایید و خوب بودن مدل را ارزیابی کنید.
+</p>
+
+<p dir="RTL">
+نمودار پراکنش را رسم می کنیم. باید نقاط نزدیک به خط y = x که رسم کرده ایم باشند که تقریبا این طور است و به طور کلی بد عمل نمی کند. برای خانههای با قیمت بالا اما مقدار پیشبینی کمتر از واقعیت است.
+</p>
+
+```{r 4, message=FALSE, warning=FALSE, fig.align='center'}
+RealVSPred = selected %>% mutate(pred = fitted(model1)) %>% select(SalePrice, pred)
+ggplot(RealVSPred, aes(x = SalePrice, y = pred)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, color = 'red')
+
+```
+
+
+***
+
+<p dir="RTL">
+۵. مقدار
+R-squared
+ مدل را به دست آورید. آیا بر اساس این کمیت مدل به خوبی به داده ها برازش داده شده است؟
+ کمیت
+ F-statistic
+ را در خلاصه مدل تفسیر نمایید.
+</p>
+
+<p dir="RTL">
+مقدار R-squared را با استفاده از رابطه ی آن محاسبه می کنیم. می بینیم که با مقدار آن در خلاصه ی مدل مطابق است. این مقدار برابر ۰.۸ که مقدار نسبتا بالایی است و می توان گفت مدل به خوبی برازش شده است.   F-statistics این را می سنجد که آیا متغیرهای ما ربطی به مقداری که میخواهیم پیشبینی کنیم داریم یا نه! به طور دقیقتر آیا این مدل از یک مدل با تنها یک عدد ثابت بهتر هست یا نه. که با توجه به مقدار بسیار کم p-value آن، فرض صفر که مدل مانند مدل با تنها یک عدد ثابت است و هیچ یک از متغیرهایمان مربوط نیستند همانطور که انتظار داریم رد می شود.
+
+</p>
+
+```{r 5, message=FALSE, warning=FALSE, fig.align='center'}
+y = selected$SalePrice
+rsquare = sum((fitted(model1) - mean(y))^2) / sum((y - mean(y))^2)
+rsquare
+```
+
+
+***
+
+<p dir="RTL">
+۶. بر اساس
+p-value
+ سطح معناداری ضرایب تصمیم بگیرید که چه متغیرهایی در مدل سازی استفاده شود.
+بر اساس متغیرهای جدید دوباره مدل سازی کنید و نتایج رو گزارش دهید.
+</p>
+
+<p dir="RTL">
+دو متغیر GarageArea و TotRmsAbvGrd مقدار p-value کمتر از ۰.۰۵ داشتند و آنها را حذف می کنیم. مدل جدید را می سازیم:
+</p>
+
+```{r 6, message=FALSE, warning=FALSE, fig.align='center'}
+model2 = lm(data = selected,
+            SalePrice ~ . - GarageArea - TotRmsAbvGrd)
+summary(model2)
+```
+
+
+***
+
+<p dir="RTL">
+۷. مدل خود را بر اساس باقی مانده نقص یابی کنید.
+سه محک 
+normality, independance, Constant Variance
+ را در نقص یابی خود در نظر بگیرید.
+</p>
+
+<p dir="RTL">
+برای بررسی constant variance و independence نمودارهای زیر را می کشیم. این نمودارها پراکنش باقیمانده بر اساس مقدار پیشبینی نشان می دهند. با این تفاوت که نمودار دوم آن را براساس انحراف معیار آنها نرمال کرده است. برای برقراری independence  انتظار داریم میانگین پراکندگی باقیمانده ها برای مقادیر مختلف پیشبینی یکسان باشد. و برای constant variance میزان فاصله نقاط از خط قرمز به طور کلی یکسان باشد. در مدل ما مشاهده می کنیم که واریانس در نزدیکی ۲۵۰۰۰۰  بیشتر از نزدیکی ۱۰۰۰۰ است و خیلی شرط constant variance برقرار نیست. همینطور مقدار میانگین و پراکنش هم برای مقادیر مختلف پیشبینی تا حدی تغییر می کند پس شرط  independence هم به طور کامل برقرار نیست. اما اوضاع خیلی هم بد نیست و می توان هنوز از مدل خطی با مقداری خطا استفاده کرد.
+</p>
+
+```{r 7A, message=FALSE, warning=FALSE, fig.align='center'}
+#independance & constant covariance
+plot(model2, which = 1)
+plot(model2, which = 3)
+```
+
+<p dir="RTL">
+برای بررسی نرمال بودن هم نمودار Q-Q را رسم می کنیم. این شرط تا حد زیادی برقرار است. تنها در دو انتها مقدار فاصله از خط مشاهده می شود که به معنی این است که دم توزیع باقیماندهها سریع تر از نرمال به صفر نزدیک می شود که خیلی مشکلی نیست و در اکثر صدک ها با نرمال تطابق دارد.
+</p>
+
+```{r 7B, message=FALSE, warning=FALSE, fig.align='center'}
+#normality
+plot(model2, which = 2)
+```
+
+***
+
+<p dir="RTL">
+۸. داده ها را به پنج قسمت تقسیم کنید. بر اساس چهار قسمت مدل خطی را بسازید و صحت مدل را برای یک قسمت 
+باقی مانده را تست کنید. خطای پیش بینی شما چقدر است؟
+</p>
+
+<p dir="RTL">
+این کار را انجام می دهیم. خطای MSE آن را هم محاسبه می کنیم. با توجه به این که قیمت ها در حدود ۲۵۰۰۰۰ هستند خطا قابل قبول است
+</p>
+
+```{r 8, message=FALSE, warning=FALSE, fig.align='center'}
+n <- nrow(selected)
+set.seed(17)
+part1indexes = sample(1:n, 4 * n / 5)
+part1 = selected %>% slice(part1indexes)
+part2 = selected %>% slice(-part1indexes)
+
+model3 = lm(data = part1,
+            SalePrice ~ . - GarageArea - TotRmsAbvGrd)
+
+MSE = mean((part2$SalePrice - predict.lm(model3, part2))^2)
+MSE
+sqrt(MSE)
+
+
+```
+
+
+***
+
+<p dir="RTL"> 
+۹. آیا قیمت ربط غیر خطی با یکی از ده متغیر استفاده شده دارد؟
+بر اساس دستاوردهای خود مدل را بهتر نمایید.
+</p>
+
+<p dir="RTL">
+
+نمودارهای پراکنش قیمت و متغیرها را رسم می کنیم. در نمودارها خط قرمز بهترین خط گذرنده و خط سبز تغییرات کلی را نشان می دهد. می بینیم که به جز دو متغیر OverallQual و YearBuilt بقیه ی متغیرها تا حد خوبی رابطه ی خطی دارند.
+</p>
+
+```{r 9, message=FALSE, warning=FALSE, fig.align='center'}
+for(varName in topVarsCor$var) {
+  p = ggplot(selected, aes(y = SalePrice, x = selected[[varName]])) +
+    geom_point(color = 'dodgerblue', alpha = 0.1) +
+    geom_smooth(method = 'lm', color = 'red') +
+    geom_smooth(color = 'green') + 
+    labs(title = paste('SalePrice vs ', varName), x = varName)
+  print(p)
+}
+```
+
+<p dir="RTL">
+برای حل این مشکل معمولا یک تبدیل غیر خطی روی متغیرها اعمال میکنند. از روی نمودار حدس میزنیم که قیمت با توان دوم قدمت رابطه دارد. (تبدیل خطی تفاوتی ایجاد نمی کند. برای همین به جای سال ساخت با سن کار می کنیم.) برای همین بهترین سهمی را از آن می گذراینم و بر اساس آن تبدیلی با چندجمله ای درجه ۲ اعمال می کنیم تا رابطه خطی شود.
+</p>
+
+```{r 9B, message=FALSE, warning=FALSE, fig.align='center'}
+PriceVsAge = house %>% filter(-1299, -524) %>% 
+  mutate(age = 2010 - YearBuilt) %>% 
+  select(age, SalePrice)
+
+varName = 'age'
+ggplot(PriceVsAge, aes(y = SalePrice, x = age)) +
+  geom_point(color = 'dodgerblue', alpha = 0.1) +
+  geom_smooth(method = 'lm', color = 'red') +
+  geom_smooth(method = 'lm', formula = y ~ x + I(x^2),color = 'green') + 
+  labs(title = paste('SalePrice vs ', varName), x = varName)
+
+ageModel = lm(PriceVsAge, formula = SalePrice ~ age + I(age^2))
+# summary(ageModel)
+
+PriceVsAge$age = (PriceVsAge$age - 87)^2
+ggplot(PriceVsAge, aes(y = SalePrice, x = age)) +
+  geom_point(color = 'dodgerblue', alpha = 0.1) +
+  geom_smooth(method = 'lm', color = 'red') +
+  geom_smooth(color = 'green') + 
+  labs(title = paste('SalePrice vs teransformed age'), x = 'teransformed age')
+
+```
+
+<p dir="RTL">
+برای OverallQual هم به طور مشابه عمل می کنیم:
+</p>
+
+```{r 9C, message=FALSE, warning=FALSE, fig.align='center'}
+PriceVsQual = house %>% filter(-1299, -524) %>% 
+  select(OverallQual, SalePrice)
+
+varName = 'OverallQual'
+ggplot(PriceVsQual, aes(y = SalePrice, x = OverallQual)) +
+  geom_point(color = 'dodgerblue', alpha = 0.1) +
+  geom_smooth(method = 'lm', color = 'red') +
+  geom_smooth(method = 'lm', formula = y ~ x + I(x^2),color = 'green') + 
+  labs(title = paste('SalePrice vs ', varName), x = varName)
+
+OQModel = lm(PriceVsQual, formula = SalePrice ~ OverallQual + I(OverallQual^2))
+# summary(OQModel)
+
+PriceVsQual$OverallQual = (PriceVsQual$OverallQual - 2.85)^2
+
+
+varName = 'OverallQual'
+ggplot(PriceVsQual, aes(y = SalePrice, x = OverallQual)) +
+  geom_point(color = 'dodgerblue', alpha = 0.1) +
+  geom_smooth(method = 'lm', color = 'red') +
+  geom_smooth(color = 'green') + 
+  labs(title = paste('SalePrice vs teransformed OverallQual'), x = 'teransformed OverallQual')
+
+```
+
+<p dir="RTL">
+مدل را با این تغییرات بهبود می دهیم:
+</p>
+
+```{r 9D, message=FALSE, warning=FALSE, fig.align='center'}
+transformed = selected %>% rename(age = YearBuilt)
+transformed$age = PriceVsAge$age
+transformed$OverallQual = PriceVsQual$OverallQual
+
+model4 = lm(data = transformed,
+            SalePrice ~ .- GarageArea - TotRmsAbvGrd)
+summary(model4)
+```
+
+***
+
+<p dir="RTL"> 
+۱۰. بر اساس مدل نهایی به دست آمده نتایج پیش بینی خود را بر روی
+test.csv
+به دست آورید و در سایت 
+kaggle
+ در مسابقه 
+ House Prices: Advanced Regression Techniques
+بارگذاری نمایید. سپس لینک رتبه و عدد آن را ضمیمه تمرین کنید.
+</p>
+
+<p dir="RTL">
+قبل از سابمیت کردن، مدل را مقداری تغییر می دهیم. ابتدا بر اساس YrSold و YearBuilt سن را حساب کردیم و مانند سوال ۹ فرض را بر فروش در سال ۲۰۱۰ نگذاشتیم. با توجه به محدودیت سوال ۱، تنها از متغیرهای عددی استفاده کرده بودیم. متغیرهای Neighborhood  و MSSubClass و OverallCond را به مدل اضافه می کنیم. برای برخی مشاهدات که اطلاعات کامل نیست، میانگین ستون مورد نظر را جایگزین می کنیم.
+</p>
+
+```{r 10, message=FALSE, warning=FALSE, fig.align='center'}
+finalVars = house %>% 
+  select(topVars, SalePrice, Neighborhood, OverallCond, MSSubClass, YrSold) %>% 
+  select(-GarageArea , -TotRmsAbvGrd) %>% 
+  mutate(age = YearBuilt - YrSold,
+         remoded = ifelse(YearBuilt == YearRemodAdd, 0, 1),
+         OverallQual = (OverallQual - 2.85)^2) %>% 
+  select(-YearBuilt, - YearRemodAdd, -YrSold) %>% 
+  filter(-1299, -524)
+finalVars$MSSubClass = as.factor(finalVars$MSSubClass)
+
+finalModel = lm(SalePrice ~ .,
+                data = finalVars)
+# summary(finalModel)
+test = read_csv('test.csv') 
+test = test %>% 
+  mutate(age = YearBuilt - 2010,
+         remoded = ifelse(YearBuilt == YearRemodAdd, 0, 1),
+         OverallQual = (OverallQual - 2.85)^2 ) %>% 
+  select(Id, topVars, age, Neighborhood, remoded, OverallCond, MSSubClass) %>% 
+  select(-YearBuilt, - YearRemodAdd)
+test$MSSubClass = as.factor(test$MSSubClass)
+test[661, "TotalBsmtSF"] = mean(test$TotalBsmtSF, na.rm = TRUE)
+test[1117, "GarageCars"] = mean(test$GarageCars, na.rm = TRUE)
+test[1359, "MSSubClass"] = 120
+testPred = predict.lm(finalModel, test)
+result = data.frame(Id = test$Id, SalePrice = testPred)
+write_csv(result, 'result.csv')
+```
+
+
+<p dir="RTL">
+نتیجه را آپلود می کنیم. رتبه ی ۲۷۸۲ به دست می آید:
+</p>
+
+
+<div align="center">
+<img  src="images/submit.png"  align = 'center'>
+</div>

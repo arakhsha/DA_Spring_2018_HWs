@@ -1,0 +1,8 @@
+library(stringr)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(highcharter)
+library(ggplot2)
+library(ggthemes)
+theme_set(theme_minimal())

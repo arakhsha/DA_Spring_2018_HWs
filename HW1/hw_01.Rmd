@@ -1,0 +1,327 @@
+---
+title: "first week: Introduction to R and Rstudio"
+author: “امین رخشا - 95109315"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/Rman.jpeg"  align = 'center'>
+</div>
+
+
+<h1 dir="RTL"> 
+تمرین سری اول: چند مساله
+</h1>
+
+<p dir="RTL"> 
+به سوال های زیر را از طریق نوشتن یک کد پاسخ دهید.
+</p>
+
+***
+
+<h2 dir="RTL">
+ماتریس دوستانه
+</h2>
+
+<p dir="RTL">
+یک ماتریس
+$(n,n)$
+که شامل اعداد 
+$1,2,...,n^2$
+است. دوستانه نامیده میشود اگر مجموع سطرها با مجموع ستون های آن برابر شوند. مثال هایی از ماتریس های دوستانه از بعد ۴و۵و۶ ارایه دهید. 
+</p>
+
+
+<h3 dir="RTL">
+پاسخ
+</h3>
+
+
+<p dir="RTL">
+برای پیدا کردن این مربع‌ها برای اعداد فرد، زوج غیر بخشپذیر بر ۴ و مضارب ۴ الگوریتم‌های متفاوتی وجود دارد که آن‌ها را برای این سوال پیاده سازی‌کردیم. تابع check هم درستی جواب را برای اطمینان بررسی می‌کند.
+</p>
+
+<p dir="RTL">
+برای مضارب ۴، اعداد را به ترتیب به صورت ستونی می‌چینیم بعد برای خانه‌های ۴ مربع $\frac{n}{4}\times \frac{n}{4}$  گوشه‌ها و مربع $\frac{n}{2}\times \frac{n}{2}$ وسط، $x$ را با $n^2+1-x$ جایگزین می‌کنیم.
+</p>
+
+<p dir="RTL">
+برای اعداد فرد، اعداد را به ترتیب به صورت قطری می‌چینیم. یعنی با شروع از خانه‌ی وسط ردیف بالا به سمت بالا راست حرکت می‌کنیم. اگر از جدول خارج شدیم، به طرف دیگر می‌رویم و اگر خانه‌ی بعدی پر بود، یک خانه به پایین حرکت می‌کنیم.
+</p>
+<p dir="RTL">
+برای اعداد زوج غیر بخشپذیر بر ۴، از الگوریتمی به نام LUX استفاده می‌کنیم. کلیت الگوریتم به این صورت است که جدول را جدولی $\frac{n}{2} \times \frac{n}{2}$ از مربع‌های $2\times2$ در نظر می‌گیریم. یک جدول جادویی $\frac{n}{2}\times \frac{n}{2}$ می‌سازیم و برای هر خانه‌ی $x$ این مربع، مربع $2\times 2$ متناظر با آن را با اعداد $4x, 4x-1, 4x-2, 4x-3$ پر می‌کنیم. این روش پر کردن برای خانه‌های مختلف تفاوت دارد. به این صورت که جدول را به ۳ بخش L، U، و X تقسیم می‌کنند و مربع‌های $2\times2$ هر بخش را به یک روش پر می‌کنند.
+</p>
+
+
+
+```{r}
+check = function(mat) {
+  n = nrow(mat)
+  m = n * (n * n + 1) / 2
+  for (i in 1:n) {
+    if (sum(mat[i, ]) != m || sum(mat[, i]) != m)
+      return(FALSE)
+  }
+  return(TRUE)
+}
+
+n = 4
+mat = matrix(1:n ^ 2, n, n)
+for (i in c(1:(n / 4), (3 * n / 4 + 1):n)) {
+  for (j in c(1:(n / 4), (3 * n / 4 + 1):n)) {
+    mat[i, j] = n * n + 1 - mat[i, j]
+  }
+}
+for (i in (n / 4 + 1):(3 * n / 4)) {
+  for (j in (n / 4 + 1):(3 * n / 4)) {
+    mat[i, j] = n * n + 1 - mat[i, j]
+  }
+}
+mat
+check(mat)
+
+n = 5
+odd_magic = function(n) {
+  mat = matrix(rep(0, n * n), n, n)
+  col = (n - 1) / 2
+  row = 0
+  for (i in 0:(n * n - 1)) {
+    mat[row + 1, col + 1] = i + 1
+    next_row = (row - 1) %% n
+    next_col = (col + 1) %% n
+    if (mat[next_row + 1, next_col + 1] != 0) {
+      next_row = (row + 1) %% n
+      next_col = col
+    }
+    row = next_row
+    col = next_col
+  }
+  return(mat)
+}
+odd_magic(5)
+check(odd_magic(5))
+
+n = 6
+m = (n - 2) / 4
+mat = matrix(rep(0, n * n), n, n)
+base = odd_magic(n / 2)
+for (i in 1:(m + 1)) {
+  for (j in 1:(n / 2)) {
+    x = base[i, j]
+    mat[2 * i, 2 * j] = 4 * x - 1
+    mat[2 * i - 1, 2 * j - 1] = 4 * x
+    mat[2 * i - 1, 2 * j] = 4 * x - 3
+    mat[2 * i, 2 * j - 1] = 4 * x - 2
+  }
+}
+i = m + 2
+for (j in 1:(n / 2)) {
+  x = base[i, j]
+  mat[2 * i, 2 * j] = 4 * x - 1
+  mat[2 * i - 1, 2 * j - 1] = 4 * x - 3
+  mat[2 * i - 1, 2 * j] = 4 * x
+  mat[2 * i, 2 * j - 1] = 4 * x - 2
+}
+if (m + 3 <= 2 * m + 1) {
+  for (i in (m + 3):(n / 2)) {
+    for (j in 1:(n / 2)) {
+      x = base[i, j]
+      mat[2 * i, 2 * j] = 4 * x - 2
+      mat[2 * i - 1, 2 * j - 1] = 4 * x
+      mat[2 * i - 1, 2 * j] = 4 * x - 3
+      mat[2 * i, 2 * j - 1] = 4 * x - 1
+    }
+  }
+}
+tmp = mat[n / 2, n / 2]
+mat[n / 2, n / 2] = mat[n / 2, n / 2 + 1]
+mat[n / 2, n / 2 + 1] = tmp
+
+tmp = mat[n / 2 + 2, n / 2]
+mat[n / 2 + 2, n / 2] = mat[n / 2 + 2, n / 2 + 1]
+mat[n / 2 + 2, n / 2 + 1] = tmp
+
+mat
+check(mat)
+
+```
+
+
+
+***
+
+<h2 dir="RTL">
+جایشگت  عجیب
+</h2>
+
+<p dir="RTL">
+جایگشت هایی از اعداد ۱ تا ۱۳ را پیدا کنید که در شرایط زیر صدق کنند:
+</p>
+
+$$ a = (a_1, a_2,..., a_{13})$$
+$$\frac{a_1}{a_2+a_3} = \frac{a_2+a_3}{a_3+a_4+a_5}<1$$
+$$\frac{a_6}{a_6+a_7}= \frac{a_6+a_7}{a_7+a_8+a_9} = \frac{a_7+a_8+a_9}{a_5+a_9+a_{10}} <1$$
+
+$$\frac{a_{11}+a_{12}}{a_{12}+a_{13}}=\frac{a_{12}+a_{13}}{a_{13}+a_{10}}<1$$
+<h3 dir="RTL">
+پاسخ
+</h3>
+<p dir="RTL">
+ابتدا با بررسی همه‌ی حالات $a_1$ تا $a_5$ جواب‌های شرط اول را پیدا و در یک لیست از آرایه‌ها ذخیره می‌کنیم. بعد برای هر یک از جواب‌ها حالات $a_6$ تا $a_‪{‬10‪}‬$ جواب‌های دو شرط اول را در یک لیست از آرایه‌های ۱۰تایی ذخیره می‌کنیم. این کار را برای شرط سوم هم انجام می‌دهیم تا جواب به دست آید.
+</p>
+
+```{r}
+firstConditionAnswers = list()
+for (a1 in 1:13)
+  for (a2 in  setdiff(1:13, a1))
+    for (a3 in  setdiff(1:13, c(a1, a2)))
+      for (a4 in  setdiff(1:13, c(a1, a2, a3)))
+        for (a5 in  setdiff(1:13, c(a1, a2, a3, a4))) {
+          x = a1 / (a2 + a3)
+          y = (a2 + a3) / (a3 + a4 + a5)
+          if (x == y && x < 1) {
+            answer = c(a1, a2, a3, a4, a5)
+            index = length(firstConditionAnswers) + 1
+            firstConditionAnswers[[index]] = answer
+          }
+        }
+secondConditionAnswers = list()
+for(first5 in firstConditionAnswers)
+  for (a6 in  setdiff(1:13, first5))
+    for (a7 in  setdiff(1:13, c(first5, a6)))
+      for (a8 in  setdiff(1:13, c(first5, a6, a7)))
+        for (a9 in  setdiff(1:13, c(first5, a6, a7, a8)))
+          for (a10 in  setdiff(1:13, c(first5, a6, a7, a8, a9))) {
+            x = a6 / (a6 + a7)
+            y = (a6 + a7) / (a7 + a8 + a9)
+            z = (a7 + a8 + a9) / (first5[5] + a9 + a10)
+            if (x == y && y == z && x < 1) {
+              answer = c(first5, a6, a7, a8, a9, a10)
+              index = length(secondConditionAnswers) + 1
+              secondConditionAnswers[[index]] = answer
+            }
+          }
+answers = list()
+for(first10 in secondConditionAnswers)
+  for (a11 in  setdiff(1:13, first10))
+    for (a12 in  setdiff(1:13, c(first10, a11)))
+      for (a13 in  setdiff(1:13, c(first10, a11, a12))) {
+        x = (a11 + a12) / (a12 + a13)
+        y = (a12 + a13) / (a13 + first10[10])
+        if (x == y && x < 1) {
+          answer = c(first10, a11, a12, a13)
+          index = length(answers) + 1
+          answers[[index]] = answer
+        }
+      }
+for (answer in answers) {
+  print(answer)
+}
+```
+
+
+***
+
+<h2 dir="RTL">
+مچ گیری
+</h2>
+
+<p dir="RTL">
+میزگردی شامل ۱۶ فرد دروغگو و راستگو تشکیل شده است. هر کسی ادعا میکند دو فرد کنار دستی او دروغگو هستند. چند نفر دروغگو در جمع وجود دارد؟
+</p>
+
+<p dir="RTL">
+میزگرد دیگری شامل ۱۲ نفر فرد راستگو و دروغگو تشکیل شده به طوری که هر فرد ادعا میکند از میان دو نفر کنار دستی یک نفر راستگو و یک نفر دروغگو هستند. چند نفر دروغگو در جمع وجود دارد؟
+</p>
+
+<p dir="RTL">
+این دفعه میزگردی هشت نفره تشکیل شده به گونه ایی که چهار نفر ادعا میکنند از از میان دو نفر کنار دستی یکی دروغگو و دیگری راستگوست و چهار نفر دیگر اعلام میکنند که هر دو فرد کنار دستی آنها دروغگو هستند. چند نفر دروغگو در میان جمع است؟
+</p>
+
+<h3 dir="RTL">
+پاسخ
+</h3>
+
+<p dir="RTL">
+در هر سه بخش تمام حالات ممکن را بررسی می‌کنیم و تعداد دروغگوها در حالاتی که در شرط صدق می‌کردند را نگه می‌داریم. تابع getPossibleStates یک ماتریس که هر سطر آن یکی از $2^n$ حالت است را برمی‌گرداند. در بخش آخر هم برای این که کدام ۴ نفر نظر اول را دارند از دستور combn استفاده می‌کنیم.
+</p>
+
+```{r}
+getPossibleStates = function(n) {
+  states = matrix(c(FALSE, TRUE), 2, 1)
+  for (i in 1:(n - 1)) {
+    m1 = cbind(matrix(rep(FALSE, 2 ^ i), 2 ^ i, 1), states)
+    m2 = cbind(matrix(rep(TRUE, 2 ^ i), 2 ^ i, 1), states)
+    states = rbind(m1, m2)
+  }
+  return (states)
+}
+
+n = 16
+states = getPossibleStates(n)
+answers = numeric(0)
+for (i in 1:2 ^ n) {
+  state = states[i, ]
+  isAnswer = TRUE
+  for (j in 1:n) {
+    left = state[(j + n - 2) %% n + 1]
+    right = state[j %% n + 1]
+    if (!xor(left || right, state[j]))
+      isAnswer = FALSE
+  }
+  if (isAnswer)
+    answers = unique(c(answers, sum(!state)))
+}
+answers
+
+n = 12
+states = getPossibleStates(n)
+answers = numeric(0)
+for (i in 1:2 ^ n) {
+  state = states[i, ]
+  isAnswer = TRUE
+  for (j in 1:n) {
+    left = state[(j + n - 2) %% n + 1]
+    right = state[j %% n + 1]
+    if (xor(xor(left, right), state[j]))
+      isAnswer = FALSE
+  }
+  if (isAnswer)
+    answers = unique(c(answers, sum(!state)))
+}
+answers
+
+n = 8
+states = getPossibleStates(n)
+answers = numeric(0)
+for (i in 1:2 ^ n) {
+  for (k in 1:choose(8, 4)) {
+    state = states[i, ]
+    type1 = combn(8, 4)[,k]
+    isAnswer = TRUE
+    for (j in 1:n) {
+      left = state[(j + n - 2) %% n + 1]
+      right = state[j %% n + 1]
+      if(j %in% type1) {
+        if (xor(xor(left, right), state[j]))
+          isAnswer = FALSE
+      }
+      else {
+        if (!xor(left || right, state[j]))
+          isAnswer = FALSE
+      }
+    }
+    if (isAnswer)
+      answers = unique(c(answers, sum(!state)))
+  }
+}
+answers
+
+```
+
+
+

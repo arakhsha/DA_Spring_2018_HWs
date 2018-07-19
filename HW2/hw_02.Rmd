@@ -1,0 +1,330 @@
+---
+title: "second week: Introduction to R and Rstudio"
+subtitle: "Mobile Data"
+author: "امین رخشا ۹۵۱۰۹۳۱۵"
+date: "`r Sys.time()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/smartphones.jpg"  align = 'center'>
+</div>
+
+<h1 dir="RTL"> 
+تمرین سری دوم: تلفن همراه شناسی!
+</h1>
+
+> <p dir="RTL"> 
+ با استفاده از داده های گوشی های همراه به سوالات زیر پاسخ دهید. 
+برای رسم نمودار از پکیج 
+ggplot2
+استفاده کنید.
+</p>
+
+<h2 dir="RTL"> 
+کارهای اولیه
+</h2>
+<p dir="RTL">
+ابتدا پکیجهای مورد استفاده را مشخص میکنیم. تم ggplot را هم تعیین میکنیم. یک مشکلی در داده وجود دارد که برای بعضی گوشیها ابعاد مختلف  گوشی یعنی  جا به جا ثبت شدهاند. چون ترتیب بزرگی ابعاد معلوم هستند، این مورد را تصحیح میکنیم.
+</p>
+
+```{r message=FALSE, warning=FALSE}
+library('dplyr')
+library('readr')
+library('ggplot2')
+library('ggthemes')
+library('ggrepel')
+library(knitr)
+library(kableExtra)
+#setting theme
+theme_set(theme_gdocs())
+
+#reading data
+mobile = read_csv('mobile_data.csv')
+
+#correcting data
+dimensions = data.frame(thickness = mobile$dim_thickness,
+                        length = mobile$dim_length,
+                        breadth = mobile$dim_breadth)
+
+mobile$dim_thickness = pmin(dimensions$thickness, dimensions$length, dimensions$breadth)
+mobile$dim_length = pmax(dimensions$thickness, dimensions$length, dimensions$breadth)
+mobile$dim_breadth = dimensions$thickness + dimensions$length + dimensions$breadth - mobile$dim_length - mobile$dim_thickness
+
+```
+
+
+***
+
+<p dir="RTL">
+۱. کدام شرکت بیشترین تعداد گوشی را تولید کرده است؟
+نمودار ستونی ۲۰ شرکت برتر بر حسب تعداد گوشی تولید کرده را رسم کنید.
+</p>
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+modelStat = mobile %>% group_by(company) %>%
+  summarise(count = n())
+modelStat = modelStat[order(modelStat$count, decreasing = TRUE), ]
+
+kable(modelStat %>% top_n(n = 1, wt = count), "html")
+
+```
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+ggplot(modelStat[1:20,], aes(x = reorder(company, count), y = count)) +
+  geom_bar(stat = 'identity', fill = "dodgerblue4") +
+  labs(y = 'Number of models', x = '', title = 'Companies with Highest Device Models') +
+  coord_flip()
+```
+
+
+***
+
+<p dir="RTL">
+۲. نمودار زمانی طول عرض  ضخامت و کیفیت دوربین گوشی ها را بکشید
+ و به نمودار هر یک مدل خطی اضافه کنید.
+</p>
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+ggplot(mobile, aes(x = year, y = dim_length)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(y = 'Length', x = 'Year', title = 'Length vs. Year')
+         
+ggplot(mobile, aes(x = year, y = dim_breadth)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(y = 'Breadth', x = 'Year', title = 'Breadth vs. Year')
+
+ggplot(mobile, aes(x = year, y = dim_thickness)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(y = 'Thickness', x = 'Year', title = 'Thickness vs. Year')
+
+ggplot(mobile, aes(x = year, y = cam_px)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(y = 'Camera Resolution', x = 'Year', title = 'Camera Resolution vs. Year')
+```
+
+
+***
+
+<p dir="RTL">
+۳. نمودار ستونی متوسط قیمت گوشی بر حسب تعداد سیم کارت و دسترسی به 
+LTE
+را رسم نمایید.
+</p>
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+priceBySimAndLTE = mobile %>% group_by(LTE, sim_no) %>% 
+  summarise(avgPrice = mean(price, na.rm = TRUE))
+
+ggplot(priceBySimAndLTE, aes(x = sim_no, y = avgPrice)) +
+  geom_bar(aes(fill = LTE), stat = 'identity', position = 'dodge') +
+  labs(y = 'Average Price', x = 'Number of Sims', title = 'Average Price by LTE and Number of Sims')
+```
+
+***
+
+<p dir="RTL">
+۴. نمودار جعبه ایی ضحامت گوشی هایی که در سال ۲۰۱۷ معرفی شده اند را برحسب اینکه کمیت جک هدفون رسم نمایید
+</p>
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+ggplot(mobile[which(mobile$year == 2017), ], aes(x = audio_jack, y = dim_thickness)) +
+  geom_boxplot(aes(fill = audio_jack)) +
+  labs(y = 'Thickness', x = 'Audio Jack', title = 'Thikness of Devices With And Without Audio Jack') +
+  guides(fill=FALSE)
+```
+
+***
+
+<p dir="RTL">
+۵. مفهوم 
+ppi 
+را در گوشی های موبایل محاسبه و هیستوگرام آن را رسم نمایید.
+همچنین نمودار سالانه متوسط این کمیت را بکشید.
+کدام گوشی بیشترین
+ppi
+را دارد؟
+</p>
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+mobile = mobile %>% mutate(ppi = sqrt(px_row^2 + px_col^2) / display_size)
+ggplot(mobile, aes(x = ppi)) + 
+  geom_histogram(fill = "dodgerblue4") +
+  labs(y = 'Count', x = 'PPI', title = 'PPI histogram')
+```
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+ppiStat = mobile %>% group_by(year) %>% summarise(avgPPI = mean(ppi, na.rm = TRUE))
+ggplot(ppiStat, aes(x = year, y = avgPPI)) +
+  geom_line(color = "dodgerblue4") + geom_point(color = "dodgerblue4") +
+  ylim(0, 400) +
+  labs(y = 'Average PPI', x = 'Year', title = 'Average PPI vs Year') 
+```
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+topPPI = mobile %>% top_n(wt = ppi, n = 1) %>% select(company, device, ppi)
+kable(topPPI)
+```
+
+
+***
+
+<p dir="RTL">
+۶. در گذشته به بعضی از مدل های گوشی نوکیا 
+**گوشکوب**
+گفته می شد. سعی کنید برای این مفهوم کمیتی مناسب تعریف کنید .
+ ده گوشکوب برتر را پیدا کرده و نمودار گوشکوبیت آن را رسم نمایید.
+</p>
+<p dir="RTL">
+معیار را یک ترکیب خطی از چگالی سطحی (وزن تقسیم بر مساحت) و کلفتی! به معنی ضخامت بر واحد سطح (ضخامت تقسیم بر مساحت) تعریف می کنیم. ضرایب را با رسم هیستوگرام این دو پارامتر و مشاهده ی نتایج به دست می آوریم
+</p>
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+gooshkubiat = function(x) {
+  kolofty = x$dim_thickness / (x$dim_length * x$dim_breadth)
+  density = x$weight / (x$dim_length * x$dim_breadth)
+  result = kolofty + density
+  result[which(x$dim_length < 65)] = rep(0, length(which(x$dim_length < 65)))
+  result[which(!is.finite(result))] = rep(NaN, length(which(!is.finite(result))))
+  return(result)
+}
+mobileWithGooshkubiat = mobile
+mobileWithGooshkubiat$gooshkubiat = gooshkubiat(mobile)
+topGooshkub = mobileWithGooshkubiat %>% top_n(10, gooshkubiat)
+ggplot(topGooshkub, aes(x = reorder(paste(company, device), gooshkubiat), y = gooshkubiat)) +
+  geom_bar(stat = 'identity', fill = "springgreen4") +
+  labs(y = 'Gooshkubiat', x = '', title = 'Top 10 Gooshkubs') +
+  coord_flip() 
+```
+
+***
+
+<p dir="RTL">
+۷. آیا تلفن همراهی وجود دارد که در آب غرق نشود؟
+اگر جواب بله هست تمام گوشی های که این خاصیت را دارند بیابید.
+با کشیدن یک نمودار به این سوال پاسخ دهید.
+</p>
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+dinsity = function(x) {
+  result = x$weight / (x$dim_length * x$dim_breadth *x$dim_thickness) * 1000
+  result[which(!is.finite(result))] = rep(NaN, length(which(!is.finite(result))))
+  return(result)
+}
+mobile$density = dinsity(mobile)
+floating = mobile %>% filter(density < 1) %>% select(company, device, density) %>% arrange(density)
+kable(floating, "html") %>%
+  kable_styling() %>%
+  scroll_box(width = "500px", height = "200px")
+```
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+ggplot(mobile[which(!is.nan(mobile$density)), ],
+  aes(x = density)) + xlim(0, 4) +
+  geom_histogram(aes(fill = density < 1), binwidth = 0.2, center = 0.1) +   
+  geom_vline(xintercept = 1, color = "dodgerblue4") +
+  labs(y = 'Frequency', x = 'Density', title = 'Density Histogram', fill = "Floats on Water")
+```
+
+***
+
+<p dir="RTL">
+۸. نمودار پراکنش حجم ذخیره سازی باطری و وزن را رسم نمایید.
+میزان همبستگی بین این دو کمیت را محاسبه کنید.
+</p>
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+ggplot(mobile, aes(x = battery_mah, y = weight)) + 
+  geom_point(color = "dodgerblue", alpha = 0.3) +
+  ylim(0, 1000) +
+  labs(y = 'Weight', x = 'Battery Capacity', title = 'Weight vs. Battery Capacity')
+cor(mobile$battery_mah, mobile$weight, use = "complete.obs")
+```
+
+***
+
+<p dir="RTL">
+۹. قیمت پرچمداران یک برند خاص مثلا سامسونگ را بیابید و نمودار قیمت زمان و نام مدل را رسم نمایید.
+</p>
+<p dir="RTL">
+پرچمدار در یک سال سامسونگ را کرانترین دستگاه در آن سال فرض میکنیم.
+</p>
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+samsungFlagship = mobile %>% filter(company == "Samsung") %>% na.omit() %>% 
+  group_by(year) %>% summarise(flagship = device[which.max(price)[1]], price = price[which.max(price)[1]])
+
+ggplot(samsungFlagship, aes(x = year, y = price, label = flagship)) + 
+  geom_line(color = "orangered") +
+  geom_point(color = "red", size = 2) +
+  geom_label_repel(size = 2, box.padding = 0.25) +
+  ylim(0, 1000) +
+  labs(y = 'Price', x = 'Year', title = 'Samsung Flagships Prices')
+```
+
+
+***
+
+<p dir="RTL">
+۱۰. سه نمودار جالب رسم کنید و توضیح دهید چرا از نظر شما جالب است؟
+</p>
+<p dir="RTL">
+یکی از مهمترین خواسته های مردم از شرکتها افزایش عمر باتری گوشی هایشان است. میانگین حجم باتری مدل های مختلف سه کمپانی معروف یعنی  HTC، Sony و LG را بررسی کردم. این سه کمپانی هر سه از یک سیستم عامل (اندروید) و پردازنده های یک شرکت (اسنپدرگون) استفاده میکنند و عمر باتری گوشی هایشان تا حد خوبی به حجم باتری بستگی دارد. نتیجه بسیار غافلگیر کننده است! سونی از همان ابتدا اهمیت زیادی به این موضوع داده ولی پیشرفت زیادی نداشته است ولیLG و HTC توانسته اند با پیشرفت به آن برسند. برای من که این زمینه را دنبال می کنم این مسئله جالب بود و جایی آن را ندیده بودم.
+</p>
+
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+topBrands = c("HTC", "LG", "Sony")
+batteryStat = mobile %>% filter(company %in% topBrands, price < 1500) %>%  group_by(company, year) %>%
+  summarise(avgBattery = mean(battery_mah, na.rm = TRUE), count = n()) %>% na.omit() 
+ggplot(batteryStat, aes(x = year, y = avgBattery, group = company, color = company)) +
+  geom_point(alpha = 0.3) + geom_line(alpha = 0.3) + geom_smooth(method = "lm", se = FALSE) +
+  xlim(2010, 2017) +
+  labs(y = 'Average Battery', x = 'Year', title = "Average Battery Capacity by Year", color = "Company")
+```
+
+<p dir="RTL">
+سامسونگ به عنوان یک از تولیدکننده های اصلی گوشی، بیشتر یک شرکت سخت افزاری است و برای ساخت گوشی به سیستم عامل بقیه ی شرکت ها وابسته است. می توانیم  توزیع سیستمعامل گوشی های این شرکت در طی زمان را بررسی کنیم. می بینیم که طیف زیادی از سیستم عاملها را استفاده کرده است. غلبه ی اندروید و افول سیمبین را میتوان دید. همچنین می بینیم که به تازگی به سیستم عامل تایزن که ساخته ی خودش است روی آورده است. برای من این تنوع سیستم عامل های استفاده شده و مشاهده ی روندهای رواج و افول سیستمعامل ها جالب بود.
+</p>
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+samsung = mobile %>% filter(company == 'Samsung', !is.na(os_type))
+ggplot(samsung, aes(x = year)) +
+  geom_bar(aes(fill = os_type), position = 'fill') +
+  labs(y = '', x = 'Year', title = "OS used by Samsung", fill = "OS type")
+```
+
+<p dir="RTL">
+یکی از پارمترهای مبارزهی کمپانی ها به خصوص در سالهای اخیر بر سر کاهش حاشیه ی دور صفحه نمایش گوشی است که با نسبت مساحت صفحه به بدنه اندازه گیری می شود. برای بررسی این دعوا در هر سال بهترین گوشی تولید شده توسط شرکت ها از این نظر را پیدا کرده و این کمیت را برای آنها می کشیم. می بینیم که LG برتری خود را به تدریج از دست داده ولی سامسونگ به آرامی پیروز شده است. نکته جالب دیگر هم اهمیت زیادی است که شرکت ها در سال اخیر به این موضوع داده اند. سونی هم انگار به این مسئله اصلا توجهی ندارد!!
+</p>
+
+```{r message=FALSE, warning=FALSE, fig.align='center'}
+topBrands = c("HTC", "LG", "Sony", "Apple", "Samsung")
+screenRatioFunc = function(x) {
+  area = x$dim_length * x$dim_breadth
+  screenArea = x$aspect_col * x$aspect_row / (x$aspect_col^2 + x$aspect_row^2) * x$display_size^2 * 25.4^2
+  result <- screenArea / area
+  result[which(!is.finite(result))] = rep(NaN, length(which(!is.finite(result))))
+  return(result)
+}
+screenRatioStat = mobile
+screenRatioStat$screenRatio = screenRatioFunc(mobile)
+screenRatioStat = screenRatioStat %>% group_by(company, year) %>% 
+  summarise(maxRatio = max(screenRatio, na.rm = TRUE)) %>%
+  filter(company %in% topBrands)
+ggplot(screenRatioStat,
+       aes(x = year, y = maxRatio, group = company, color = company)) +
+    geom_point() + geom_line() +
+  xlim(2012, 2017) + ylim(0.5, 1) +
+  labs(y = 'Highest Screen To Body Ratio', x = 'Year', title = "Highest Screen To Body Ratio of companies",
+       color = "Company")
+```
+
+
