@@ -1,19 +1,25 @@
-GDP.growth= data %>% 
-  filter(`Indicator Code` == 'NY.GDP.MKTP.KD') %>% 
-  gather(key = 'year', value = 'current', `1960`:`2015`) %>% 
-  select(`Country Name`, year, current) %>% 
-  group_by(`Country Name`) %>% 
-  arrange(year) %>% 
-  mutate(year = as.numeric(year),
-          start = year - 10,
-         before = lag(current, n = 10),
-         growth = (current / lag(current, n = 10)) * 100 - 100) %>% 
+GDPgrowthMigration = data %>% 
+  select(-X63) %>% 
+  filter(`Indicator Code` %in% c('NY.GDP.MKTP.KD.ZG', 'SM.POP.NETM')) %>% 
+  gather("year", "value", `1960`:`2017`) %>% 
   drop_na() %>% 
-  top_n(1, wt = growth) %>% 
-  ungroup() %>% 
-  arrange(-growth) %>% 
-  mutate(rank = row_number()) %>% 
-  top_n(20, wt = growth) %>% 
-  rename(end = year, final = current)
+  mutate(year = as.numeric(year)) %>% 
+  arrange(year) %>% 
+  group_by(`Country Name`, `Indicator Code`) %>% 
+  summarise(lastValue = last(value)) %>% 
+  spread("Indicator Code", "lastValue") %>% 
+  rename(country = `Country Name`, gdpGrowth = `NY.GDP.MKTP.KD.ZG`, migration = `SM.POP.NETM`) %>% 
+  mutate(gdpGrowth = round(gdpGrowth), migration = ifelse(migration > 0, "receiver", "Sender")) %>%
+  drop_na()
 
-kable(GDP.growth, caption = "Greatest Economic Explosions!")
+senders = GDPgrowthMigration %>% filter(migration == "Sender") %>% .$gdpGrowth
+receivers = GDPgrowthMigration %>% filter(migration == "receiver") %>% .$gdpGrowth
+wilcox.test(senders, receivers)
+
+paste("Senders Avg. GDP growth:", mean(senders))
+paste("Receivers Avg. GDP growth:", mean(receivers))
+
+GDPgrowthMigration %>% 
+  select(country, migration) %>% 
+  filter(country %in% c('Syrian Arab Republic', 'Germany', 'United States')) %>% 
+  kable(caption = "Some Of GDP growth vs. net immigration data")

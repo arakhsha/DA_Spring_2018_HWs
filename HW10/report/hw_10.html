@@ -104,7 +104,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <h1 class="title toc-ignore project-name">Cluster Analysis</h1>
 <h3 class="subtitle project-tagline">WDI Indicators</h3>
 <h4 class="author project-author">امین رخشا ۹۵۱۰۹۳۱۵</h4>
-<h4 class="date project-date">2018-07-19 12:27:53</h4>
+<h4 class="date project-date">2018-07-20 22:26:11</h4>
 </section>
 
 
@@ -522,6 +522,8 @@ model =<span class="st"> </span><span class="kw">h2o.glm</span>(<span class="dt"
   |                                                                       
   |                                                                 |   0%
   |                                                                       
+  |===                                                              |   4%
+  |                                                                       
   |=================================================================| 100%</code></pre>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">h2o.mse</span>(model)</code></pre></div>
 <pre><code>## [1] 4.316019</code></pre>
@@ -861,223 +863,62 @@ results =<span class="st"> </span><span class="kw">data.frame</span>(<span class
 ##       rho 
 ## 0.2020958</code></pre>
 <p dir="RTL">
-ایران در سال‌های ۱۳۴۲ تا ۱۳۵۲ ۱۲مین بزرگترین انفجار اقتصادی در تاریخ معاصر را تجربه کرده است.
+کشورهای مهاجرپذیر از کشورهای مهاجر رشد اقتصادی کمتری دارند.
 </p>
 <p dir="RTL">
-بیشترین رشدهای اقتصادی در طی بازه‌های ده ساله در میان کشورها را پیدا می‌کنیم. نکته‌ی جالب این است که تولید ناخالص داخلی کشور گینه‌استوایی در طی سال‌های ۱۹۹۴ تا ۲۰۰۴، ۲۶۶۰ برابر شده است!! ایران هم با ۲۲۳ برابر شدن این شاخص در سال‌های ۱۹۶۳ تا ۱۹۷۳ در رتبه‌ی ۱۲م بزرگترین انفجارها قرار دارد.
+انتظار داریم کشورهایی که مردم آن‌ها به خارج مهاجرت می‌کنند در شرایط بدتری باشند و رشد اقتصادی مناسبی نداشته باشند. اما بر خلاف انتظار اینطور نیست!! کشورهایی که مردم آن‌ها مهاجرت می‌کنند رشد اقتصادی بیشتری دارند! برای بررسی این موضوع از شاخص net migration و رشد اقتصادی استفاده می‌کنیم. نتیجه آنقدر شگفت آور بود که فکر کردیم شاخص net migration را اشتباه برداشت کرده‌ایم. برای همین برای بررسی کشورهای سوریه، آلمان و آمریکا رو بررسی کردیم که وضعیت آن‌ها را می‌دانیم. می‌بینیم که اشتباهی رخ نداده و نتیجه واقعیت دارد.
 </p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">GDP.growth=<span class="st"> </span>data <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">filter</span>(<span class="st">`</span><span class="dt">Indicator Code</span><span class="st">`</span> <span class="op">==</span><span class="st"> 'NY.GDP.MKTP.KD'</span>) <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">gather</span>(<span class="dt">key =</span> <span class="st">'year'</span>, <span class="dt">value =</span> <span class="st">'current'</span>, <span class="st">`</span><span class="dt">1960</span><span class="st">`</span><span class="op">:</span><span class="st">`</span><span class="dt">2015</span><span class="st">`</span>) <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">select</span>(<span class="st">`</span><span class="dt">Country Name</span><span class="st">`</span>, year, current) <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">group_by</span>(<span class="st">`</span><span class="dt">Country Name</span><span class="st">`</span>) <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">arrange</span>(year) <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">mutate</span>(<span class="dt">year =</span> <span class="kw">as.numeric</span>(year),
-          <span class="dt">start =</span> year <span class="op">-</span><span class="st"> </span><span class="dv">10</span>,
-         <span class="dt">before =</span> <span class="kw">lag</span>(current, <span class="dt">n =</span> <span class="dv">10</span>),
-         <span class="dt">growth =</span> (current <span class="op">/</span><span class="st"> </span><span class="kw">lag</span>(current, <span class="dt">n =</span> <span class="dv">10</span>)) <span class="op">*</span><span class="st"> </span><span class="dv">100</span> <span class="op">-</span><span class="st"> </span><span class="dv">100</span>) <span class="op">%&gt;%</span><span class="st"> </span>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">GDPgrowthMigration =<span class="st"> </span>data <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">select</span>(<span class="op">-</span>X63) <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">filter</span>(<span class="st">`</span><span class="dt">Indicator Code</span><span class="st">`</span> <span class="op">%in%</span><span class="st"> </span><span class="kw">c</span>(<span class="st">'NY.GDP.MKTP.KD.ZG'</span>, <span class="st">'SM.POP.NETM'</span>)) <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">gather</span>(<span class="st">&quot;year&quot;</span>, <span class="st">&quot;value&quot;</span>, <span class="st">`</span><span class="dt">1960</span><span class="st">`</span><span class="op">:</span><span class="st">`</span><span class="dt">2017</span><span class="st">`</span>) <span class="op">%&gt;%</span><span class="st"> </span>
 <span class="st">  </span><span class="kw">drop_na</span>() <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">top_n</span>(<span class="dv">1</span>, <span class="dt">wt =</span> growth) <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">ungroup</span>() <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">arrange</span>(<span class="op">-</span>growth) <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">mutate</span>(<span class="dt">rank =</span> <span class="kw">row_number</span>()) <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">top_n</span>(<span class="dv">20</span>, <span class="dt">wt =</span> growth) <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">rename</span>(<span class="dt">end =</span> year, <span class="dt">final =</span> current)
+<span class="st">  </span><span class="kw">mutate</span>(<span class="dt">year =</span> <span class="kw">as.numeric</span>(year)) <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">arrange</span>(year) <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">group_by</span>(<span class="st">`</span><span class="dt">Country Name</span><span class="st">`</span>, <span class="st">`</span><span class="dt">Indicator Code</span><span class="st">`</span>) <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">summarise</span>(<span class="dt">lastValue =</span> <span class="kw">last</span>(value)) <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">spread</span>(<span class="st">&quot;Indicator Code&quot;</span>, <span class="st">&quot;lastValue&quot;</span>) <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">rename</span>(<span class="dt">country =</span> <span class="st">`</span><span class="dt">Country Name</span><span class="st">`</span>, <span class="dt">gdpGrowth =</span> <span class="st">`</span><span class="dt">NY.GDP.MKTP.KD.ZG</span><span class="st">`</span>, <span class="dt">migration =</span> <span class="st">`</span><span class="dt">SM.POP.NETM</span><span class="st">`</span>) <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">mutate</span>(<span class="dt">gdpGrowth =</span> <span class="kw">round</span>(gdpGrowth), <span class="dt">migration =</span> <span class="kw">ifelse</span>(migration <span class="op">&gt;</span><span class="st"> </span><span class="dv">0</span>, <span class="st">&quot;receiver&quot;</span>, <span class="st">&quot;Sender&quot;</span>)) <span class="op">%&gt;%</span>
+<span class="st">  </span><span class="kw">drop_na</span>()
 
-<span class="kw">kable</span>(GDP.growth, <span class="dt">caption =</span> <span class="st">&quot;Greatest Economic Explosions!&quot;</span>)</code></pre></div>
+senders =<span class="st"> </span>GDPgrowthMigration <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">filter</span>(migration <span class="op">==</span><span class="st"> &quot;Sender&quot;</span>) <span class="op">%&gt;%</span><span class="st"> </span>.<span class="op">$</span>gdpGrowth
+receivers =<span class="st"> </span>GDPgrowthMigration <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">filter</span>(migration <span class="op">==</span><span class="st"> &quot;receiver&quot;</span>) <span class="op">%&gt;%</span><span class="st"> </span>.<span class="op">$</span>gdpGrowth
+<span class="kw">wilcox.test</span>(senders, receivers)</code></pre></div>
+<pre><code>## 
+##  Wilcoxon rank sum test with continuity correction
+## 
+## data:  senders and receivers
+## W = 8429.5, p-value = 0.0002444
+## alternative hypothesis: true location shift is not equal to 0</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">paste</span>(<span class="st">&quot;Senders Avg. GDP growth:&quot;</span>, <span class="kw">mean</span>(senders))</code></pre></div>
+<pre><code>## [1] &quot;Senders Avg. GDP growth: 2.8476821192053&quot;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">paste</span>(<span class="st">&quot;Receivers Avg. GDP growth:&quot;</span>, <span class="kw">mean</span>(receivers))</code></pre></div>
+<pre><code>## [1] &quot;Receivers Avg. GDP growth: 1.95402298850575&quot;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">GDPgrowthMigration <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">select</span>(country, migration) <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">filter</span>(country <span class="op">%in%</span><span class="st"> </span><span class="kw">c</span>(<span class="st">'Syrian Arab Republic'</span>, <span class="st">'Germany'</span>, <span class="st">'United States'</span>)) <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">kable</span>(<span class="dt">caption =</span> <span class="st">&quot;Some Of GDP growth vs. net immigration data&quot;</span>)</code></pre></div>
 <table>
-<caption>Greatest Economic Explosions!</caption>
+<caption>Some Of GDP growth vs. net immigration data</caption>
 <thead>
 <tr class="header">
-<th align="left">Country Name</th>
-<th align="right">end</th>
-<th align="right">final</th>
-<th align="right">start</th>
-<th align="right">before</th>
-<th align="right">growth</th>
-<th align="right">rank</th>
+<th align="left">country</th>
+<th align="left">migration</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td align="left">Equatorial Guinea</td>
-<td align="right">2004</td>
-<td align="right">10340911892</td>
-<td align="right">1994</td>
-<td align="right">374545778</td>
-<td align="right">2660.9207</td>
-<td align="right">1</td>
+<td align="left">Germany</td>
+<td align="left">receiver</td>
 </tr>
 <tr class="even">
-<td align="left">Oman</td>
-<td align="right">1976</td>
-<td align="right">10627474642</td>
-<td align="right">1966</td>
-<td align="right">1545516775</td>
-<td align="right">587.6324</td>
-<td align="right">2</td>
+<td align="left">Syrian Arab Republic</td>
+<td align="left">Sender</td>
 </tr>
 <tr class="odd">
-<td align="left">Bosnia and Herzegovina</td>
-<td align="right">2004</td>
-<td align="right">13720462044</td>
-<td align="right">1994</td>
-<td align="right">2758501862</td>
-<td align="right">397.3882</td>
-<td align="right">3</td>
-</tr>
-<tr class="even">
-<td align="left">Botswana</td>
-<td align="right">1978</td>
-<td align="right">1507742529</td>
-<td align="right">1968</td>
-<td align="right">346799292</td>
-<td align="right">334.7594</td>
-<td align="right">4</td>
-</tr>
-<tr class="odd">
-<td align="left">Azerbaijan</td>
-<td align="right">2009</td>
-<td align="right">50453518393</td>
-<td align="right">1999</td>
-<td align="right">11833067994</td>
-<td align="right">326.3773</td>
-<td align="right">5</td>
-</tr>
-<tr class="even">
-<td align="left">Saudi Arabia</td>
-<td align="right">1979</td>
-<td align="right">336677102293</td>
-<td align="right">1969</td>
-<td align="right">81427200000</td>
-<td align="right">313.4701</td>
-<td align="right">6</td>
-</tr>
-<tr class="odd">
-<td align="left">Iraq</td>
-<td align="right">2001</td>
-<td align="right">103939260216</td>
-<td align="right">1991</td>
-<td align="right">25620782637</td>
-<td align="right">305.6834</td>
-<td align="right">7</td>
-</tr>
-<tr class="even">
-<td align="left">Gabon</td>
-<td align="right">1976</td>
-<td align="right">12938734358</td>
-<td align="right">1966</td>
-<td align="right">3384019196</td>
-<td align="right">282.3481</td>
-<td align="right">8</td>
-</tr>
-<tr class="odd">
-<td align="left">Liberia</td>
-<td align="right">2005</td>
-<td align="right">912479873</td>
-<td align="right">1995</td>
-<td align="right">240097056</td>
-<td align="right">280.0463</td>
-<td align="right">9</td>
-</tr>
-<tr class="even">
-<td align="left">Qatar</td>
-<td align="right">2011</td>
-<td align="right">141857635543</td>
-<td align="right">2001</td>
-<td align="right">37449372355</td>
-<td align="right">278.7984</td>
-<td align="right">10</td>
-</tr>
-<tr class="odd">
-<td align="left">Macao SAR, China</td>
-<td align="right">2012</td>
-<td align="right">37379691633</td>
-<td align="right">2002</td>
-<td align="right">10805837300</td>
-<td align="right">245.9213</td>
-<td align="right">11</td>
-</tr>
-<tr class="even">
-<td align="left">Iran, Islamic Rep.</td>
-<td align="right">1973</td>
-<td align="right">248492715475</td>
-<td align="right">1963</td>
-<td align="right">76948875302</td>
-<td align="right">222.9322</td>
-<td align="right">12</td>
-</tr>
-<tr class="odd">
-<td align="left">Myanmar</td>
-<td align="right">2008</td>
-<td align="right">40874960812</td>
-<td align="right">1998</td>
-<td align="right">12666639111</td>
-<td align="right">222.6978</td>
-<td align="right">13</td>
-</tr>
-<tr class="even">
-<td align="left">Cabo Verde</td>
-<td align="right">2001</td>
-<td align="right">969632085</td>
-<td align="right">1991</td>
-<td align="right">326507051</td>
-<td align="right">196.9713</td>
-<td align="right">14</td>
-</tr>
-<tr class="odd">
-<td align="left">Singapore</td>
-<td align="right">1974</td>
-<td align="right">20321818849</td>
-<td align="right">1964</td>
-<td align="right">6848258159</td>
-<td align="right">196.7443</td>
-<td align="right">15</td>
-</tr>
-<tr class="even">
-<td align="left">Korea, Rep.</td>
-<td align="right">1977</td>
-<td align="right">119250454777</td>
-<td align="right">1967</td>
-<td align="right">41033630578</td>
-<td align="right">190.6164</td>
-<td align="right">16</td>
-</tr>
-<tr class="odd">
-<td align="left">Rwanda</td>
-<td align="right">2004</td>
-<td align="right">3539806407</td>
-<td align="right">1994</td>
-<td align="right">1229679413</td>
-<td align="right">187.8642</td>
-<td align="right">17</td>
-</tr>
-<tr class="even">
-<td align="left">Turkmenistan</td>
-<td align="right">2014</td>
-<td align="right">34979955661</td>
-<td align="right">2004</td>
-<td align="right">12198334458</td>
-<td align="right">186.7601</td>
-<td align="right">18</td>
-</tr>
-<tr class="odd">
-<td align="left">Ethiopia</td>
-<td align="right">2013</td>
-<td align="right">39984181570</td>
-<td align="right">2003</td>
-<td align="right">14064103274</td>
-<td align="right">184.2995</td>
-<td align="right">19</td>
-</tr>
-<tr class="even">
-<td align="left">Chad</td>
-<td align="right">2010</td>
-<td align="right">10657705536</td>
-<td align="right">2000</td>
-<td align="right">3858672133</td>
-<td align="right">176.2014</td>
-<td align="right">20</td>
+<td align="left">United States</td>
+<td align="left">receiver</td>
 </tr>
 </tbody>
 </table>
